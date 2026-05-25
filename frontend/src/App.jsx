@@ -13,6 +13,8 @@ import {
 } from 'lucide-react';
 import './App.css';
 
+const API_BASE = import.meta.env.PROD ? '/_/backend/api' : '/api';
+
 function App() {
   const [questions, setQuestions] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -59,7 +61,7 @@ function App() {
   const fetchQuestions = async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/questions');
+      const response = await fetch(`${API_BASE}/questions`);
       if (response.ok) {
         const data = await response.json();
         setQuestions(data);
@@ -122,7 +124,7 @@ function App() {
     setQuestions(prev => prev.map(item => item.id === id ? { ...item, done: newDoneState } : item));
 
     try {
-      const response = await fetch(`/api/questions/${id}`, {
+      const response = await fetch(`${API_BASE}/questions/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ done: newDoneState })
@@ -161,7 +163,7 @@ function App() {
     };
 
     try {
-      const response = await fetch('/api/questions', {
+      const response = await fetch(`${API_BASE}/questions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newQuestion)
@@ -205,7 +207,7 @@ function App() {
     };
 
     try {
-      const response = await fetch(`/api/questions/${editForm.id}`, {
+      const response = await fetch(`${API_BASE}/questions/${editForm.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updatedFields)
@@ -228,7 +230,7 @@ function App() {
     if (!window.confirm(`Are you sure you want to delete "${q.name}"?`)) return;
 
     try {
-      const response = await fetch(`/api/questions/${q.id}`, {
+      const response = await fetch(`${API_BASE}/questions/${q.id}`, {
         method: 'DELETE'
       });
       if (response.ok) {
@@ -251,7 +253,7 @@ function App() {
   // Reset progress handler
   const handleResetConfirm = async () => {
     try {
-      const response = await fetch('/api/questions/reset', {
+      const response = await fetch(`${API_BASE}/questions/reset`, {
         method: 'POST'
       });
       if (response.ok) {
