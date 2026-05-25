@@ -21,10 +21,7 @@ import {
   Menu
 } from 'lucide-react';
 import './App.css';
-
-const API_BASE = import.meta.env.PROD 
-  ? (import.meta.env.VITE_API_URL || '/_/backend/api')
-  : '/api';
+import { baseURL } from './config';
 
 function App() {
   // Authentication & Navigation State
@@ -87,7 +84,7 @@ function App() {
 
     try {
       setLoading(true);
-      const response = await fetch(`${API_BASE}/questions`, {
+      const response = await fetch(`${baseURL}/api/questions`, {
         headers: {
           'Authorization': `Bearer ${targetToken}`
         }
@@ -128,7 +125,7 @@ function App() {
     setAuthLoading(true);
     try {
       const endpoint = type === 'login' ? 'login' : 'signup';
-      const response = await fetch(`${API_BASE}/auth/${endpoint}`, {
+      const response = await fetch(`${baseURL}/api/auth/${endpoint}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -222,7 +219,7 @@ function App() {
     setQuestions(prev => prev.map(item => item.id === id ? { ...item, done: newDoneState } : item));
 
     try {
-      const response = await fetch(`${API_BASE}/questions/${id}`, {
+      const response = await fetch(`${baseURL}/api/questions/${id}`, {
         method: 'PUT',
         headers: { 
           'Content-Type': 'application/json',
@@ -261,7 +258,7 @@ function App() {
     setQuestions(prev => prev.map(item => item.id === id ? { ...item, revisions: newRevisionsVal } : item));
 
     try {
-      const response = await fetch(`${API_BASE}/questions/${id}`, {
+      const response = await fetch(`${baseURL}/api/questions/${id}`, {
         method: 'PUT',
         headers: { 
           'Content-Type': 'application/json',
@@ -299,7 +296,7 @@ function App() {
     };
 
     try {
-      const response = await fetch(`${API_BASE}/questions`, {
+      const response = await fetch(`${baseURL}/api/questions`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
@@ -347,7 +344,7 @@ function App() {
     };
 
     try {
-      const response = await fetch(`${API_BASE}/questions/${editForm.id}`, {
+      const response = await fetch(`${baseURL}/api/questions/${editForm.id}`, {
         method: 'PUT',
         headers: { 
           'Content-Type': 'application/json',
@@ -373,7 +370,7 @@ function App() {
     if (!window.confirm(`Are you sure you want to delete "${q.name}"?`)) return;
 
     try {
-      const response = await fetch(`${API_BASE}/questions/${q.id}`, {
+      const response = await fetch(`${baseURL}/api/questions/${q.id}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`
@@ -399,7 +396,7 @@ function App() {
   // Reset progress handler
   const handleResetConfirm = async () => {
     try {
-      const response = await fetch(`${API_BASE}/questions/reset`, {
+      const response = await fetch(`${baseURL}/api/questions/reset`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`
