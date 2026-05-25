@@ -14,8 +14,9 @@ import {
 import './App.css';
 
 const API_BASE = import.meta.env.PROD 
-  ? (import.meta.env.VITE_API_URL || 'https://myowndsatracker-n8wu-cqkajbfel-gopals-projects-e1140103.vercel.app/api')
+  ? (import.meta.env.VITE_API_URL || 'https://myowndsatracker-n8wu.vercel.app/api')
   : '/api';
+
 
 
 function App() {
