@@ -2,6 +2,14 @@
 
 A high-performance, premium web application built using the MERN stack (MongoDB, Express, React, Node.js) to build custom DSA sheets, track revision progress, and enable lightning-fast lookups. Featuring user authentication, real-time CRUD operations, dynamic stats visualization, and a sleek, developer-centric dark user interface.
 
+## 📸 Screenshots
+
+### Landing Page
+![Landing Page](frontend/Images/Homepage.png)
+
+### Dashboard Tracker
+![Dashboard Tracker](frontend/Images/Tracker%20Page.png)
+
 ---
 
 ## 🚀 System Architecture
