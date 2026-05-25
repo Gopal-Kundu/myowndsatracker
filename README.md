@@ -38,7 +38,7 @@ DSA Sheet/
    ```
 
 ### 2. User-Specific Sheet Initialization
-When a new user registers, the application automatically initializes their account with a default set of DSA problems cloned from the template collection. This gives students and professionals an immediate starting list that they can fully customize, edit, delete, or expand.
+When a new user registers, they start with a completely empty DSA revision sheet. This allows students and professionals to build, customize, and curate their own personal roadmap entirely from scratch.
 
 ---
 

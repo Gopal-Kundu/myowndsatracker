@@ -14,7 +14,7 @@ exports.getAllQuestions = async (req, res) => {
 // Add a new question for the logged-in user
 exports.addQuestion = async (req, res) => {
   try {
-    const { id, topic, name, link, difficulty, done } = req.body;
+    const { id, topic, name, link, difficulty, done, revisions } = req.body;
     
     const finalId = id || 'q_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
     
@@ -31,6 +31,7 @@ exports.addQuestion = async (req, res) => {
       link,
       difficulty,
       done: done || false,
+      revisions: revisions || 0,
       user: req.user._id
     });
 

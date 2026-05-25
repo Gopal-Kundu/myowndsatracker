@@ -722,6 +722,67 @@ body::after {
   gap: 0.5rem;
 }
 
+.col-revisions {
+  width: 130px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+}
+
+/* Revisions Counter Styles */
+.revisions-counter {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background-color: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-color);
+  padding: 0.25rem 0.5rem;
+  border-radius: var(--radius-md);
+  user-select: none;
+}
+
+.btn-counter {
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-sm);
+  background-color: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-color);
+  color: var(--color-text-secondary);
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  line-height: 1;
+}
+
+.btn-counter:hover:not(:disabled) {
+  background-color: var(--color-accent);
+  color: #000;
+  border-color: var(--color-accent);
+}
+
+.btn-counter:active:not(:disabled) {
+  transform: scale(0.95);
+}
+
+.btn-counter:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.revisions-count {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: var(--color-text-primary);
+  min-width: 20px;
+  text-align: center;
+}
+
 /* Responsive Overrides */
 @media (max-width: 900px) {
   .questions-table-header {
@@ -761,6 +822,12 @@ body::after {
   .col-difficulty {
     width: auto;
     order: 5;
+    padding-left: 2.75rem;
+  }
+
+  .col-revisions {
+    width: auto;
+    order: 6;
     padding-left: 2.75rem;
   }
 }

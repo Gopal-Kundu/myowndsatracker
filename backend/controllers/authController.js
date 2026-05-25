@@ -36,30 +36,7 @@ exports.signup = async (req, res) => {
 
     await newUser.save();
 
-    // Clone default template questions (questions in DB without a user field)
-    const templateQuestions = await Question.find({ user: { $exists: false } });
-    
-    let clonedQuestionIds = [];
-    
-    if (templateQuestions.length > 0) {
-      const clonedQuestionsData = templateQuestions.map(q => ({
-        id: q.id,
-        topic: q.topic,
-        name: q.name,
-        link: q.link,
-        difficulty: q.difficulty,
-        done: false,
-        user: newUser._id
-      }));
 
-      // Insert all cloned questions
-      const insertedQuestions = await Question.insertMany(clonedQuestionsData);
-      clonedQuestionIds = insertedQuestions.map(q => q._id);
-      
-      // Update user with these questions
-      newUser.questions = clonedQuestionIds;
-      await newUser.save();
-    }
 
     // Generate JWT
     const token = jwt.sign({ id: newUser._id }, JWT_SECRET, { expiresIn: '7d' });

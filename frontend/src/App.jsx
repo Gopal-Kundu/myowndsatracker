@@ -246,6 +246,41 @@ function App() {
     }
   };
 
+  // Update revisions counter
+  const handleUpdateRevisions = async (id, newRevisionsVal) => {
+    if (newRevisionsVal < 0) return;
+    const q = questions.find(item => item.id === id);
+    if (!q) return;
+
+    const oldRevisions = q.revisions || 0;
+
+    // Optimistic UI update
+    setQuestions(prev => prev.map(item => item.id === id ? { ...item, revisions: newRevisionsVal } : item));
+
+    try {
+      const response = await fetch(`${API_BASE}/questions/${id}`, {
+        method: 'PUT',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ revisions: newRevisionsVal })
+      });
+      if (response.ok) {
+        showToast(`Updated revisions for "${q.name}" to ${newRevisionsVal}.`, "success");
+      } else {
+        // Rollback
+        setQuestions(prev => prev.map(item => item.id === id ? { ...item, revisions: oldRevisions } : item));
+        showToast("Failed to update revisions on server.", "warning");
+      }
+    } catch (error) {
+      console.error('Failed to update revisions:', error);
+      // Rollback
+      setQuestions(prev => prev.map(item => item.id === id ? { ...item, revisions: oldRevisions } : item));
+      showToast("Failed to update revisions on server.", "warning");
+    }
+  };
+
   // Add question handler
   const handleAddSubmit = async (e) => {
     e.preventDefault();
@@ -418,7 +453,7 @@ function App() {
         <div className="header-container">
           <div className="header-left">
             <div className="logo-group" onClick={() => !token && setCurrentView('landing')} style={{ cursor: !token ? 'pointer' : 'default' }}>
-              <span className="logo-badge">PRO</span>
+          
               <h1>LeetTracker</h1>
             </div>
             
@@ -486,7 +521,7 @@ function App() {
       {currentView === 'landing' && (
         <div className="landing-container">
           <section className="landing-hero">
-            <span className="logo-badge">INTRODUCING LEETTRACKER 2.0</span>
+            
             <h2 className="landing-title">Build Your Curated DSA Study Plan</h2>
             <p className="landing-subtitle">
               A premium, high-performance web dashboard built for students and professionals to build custom DSA sheets, track revision progress, and enable lightning-fast lookups.
@@ -722,8 +757,8 @@ function App() {
             ) : filteredQuestions.length === 0 ? (
               <div className="empty-state">
                 <FolderOpen className="empty-state-icon" size={48} />
-                <h3>No questions found</h3>
-                <p>Try resetting filters or adding a new question to this board.</p>
+                <h3>Your DSA revision sheet is empty</h3>
+                <p>Start curating your personal DSA roadmap by clicking the "Add Question" button above.</p>
               </div>
             ) : (
               <div className="questions-table-container">
@@ -732,6 +767,7 @@ function App() {
                   <div className="col-title">Title</div>
                   <div className="col-topic">Topic</div>
                   <div className="col-difficulty">Difficulty</div>
+                  <div className="col-revisions">Revisions</div>
                   <div className="col-action">Action</div>
                 </div>
                 <div className="questions-table-body">
@@ -763,6 +799,27 @@ function App() {
                       <div className="col-difficulty">
                         <span className={`diff-badge ${q.difficulty.toLowerCase()}`}>{q.difficulty}</span>
                       </div>
+
+                      <div className="col-revisions">
+                        <div className="revisions-counter">
+                          <button 
+                            className="btn-counter btn-counter-minus" 
+                            onClick={() => handleUpdateRevisions(q.id, (q.revisions || 0) - 1)}
+                            disabled={(q.revisions || 0) <= 0}
+                            title="Decrement revisions"
+                          >
+                            -
+                          </button>
+                          <span className="revisions-count">{q.revisions || 0}</span>
+                          <button 
+                            className="btn-counter btn-counter-plus" 
+                            onClick={() => handleUpdateRevisions(q.id, (q.revisions || 0) + 1)}
+                            title="Increment revisions"
+                          >
+                            +
+                          </button>
+                        </div>
+                      </div>
                       
                       <div className="col-action">
                         <button className="btn-edit" title="Edit this question" onClick={() => handleEditClick(q)}>
@@ -783,13 +840,8 @@ function App() {
 
       {/* Footer */}
       <footer className="main-footer">
-        <div className="footer-container">
-          <p>&copy; 2026 LeetTracker. Engineered for Elite Developers.</p>
-          <div className="footer-links">
-            <a href="https://leetcode.com" target="_blank" rel="noopener noreferrer">
-              <ExternalLink className="mini-icon" size={12} /> LeetCode Website
-            </a>
-          </div>
+        <div className="footer-container" style={{ justifyContent: 'center' }}>
+          <p>Made by Gopal Kundu</p>
         </div>
       </footer>
 
