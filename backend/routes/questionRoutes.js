@@ -1,8 +1,12 @@
 const express = require('express');
 const router = express.Router();
 const questionController = require('../controllers/questionController');
+const auth = require('../middleware/auth');
 
-// GET /api/questions - Fetch all questions
+// Protect all question routes
+router.use(auth);
+
+// GET /api/questions - Fetch all questions for user
 router.get('/', questionController.getAllQuestions);
 
 // POST /api/questions - Add a new question

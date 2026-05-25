@@ -4,6 +4,7 @@ const cors = require('cors');
 require('dotenv').config();
 
 const questionRoutes = require('./routes/questionRoutes');
+const authRoutes = require('./routes/authRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -11,7 +12,6 @@ const PORT = process.env.PORT || 5000;
 // Middleware
 app.use(cors());
 app.use(express.json());
-
 
 // MongoDB Connection
 const MONGODB_URI = process.env.MONGODB_URI;
@@ -25,12 +25,20 @@ if (!MONGODB_URI) {
 mongoose.connect(MONGODB_URI)
   .then(() => {
     console.log('\x1b[32m[Database] Connected to MongoDB successfully.\x1b[0m');
+    
+    // Drop old index on 'id' if it exists to prevent conflicts
+    mongoose.connection.db.collection('questions').dropIndex('id_1')
+      .then(() => console.log('[Database] Old unique index id_1 dropped successfully.'))
+      .catch(() => {
+        // Index might not exist, which is fine
+      });
   })
   .catch(err => {
-    console.error('\x1b[31m[Database] MongoDB connection error:\x1b[0m', err);
+    console.error('[Database] MongoDB connection error:', err);
   });
 
 // Routes
+app.use('/api/auth', authRoutes);
 app.use('/api/questions', questionRoutes);
 
 // Export app for serverless environment (e.g. Vercel)
@@ -42,4 +50,3 @@ if (process.env.NODE_ENV !== 'production') {
     console.log(`\x1b[32m[Server] Running on http://localhost:${PORT}\x1b[0m`);
   });
 }
-

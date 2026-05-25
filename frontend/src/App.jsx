@@ -9,7 +9,15 @@ import {
   FolderOpen, 
   Search, 
   X, 
-  Loader2 
+  Loader2,
+  LogOut,
+  User,
+  Key,
+  Shield,
+  Sparkles,
+  Code,
+  Award,
+  Terminal
 } from 'lucide-react';
 import './App.css';
 
@@ -17,11 +25,20 @@ const API_BASE = import.meta.env.PROD
   ? (import.meta.env.VITE_API_URL || 'https://myowndsatracker-n8wu.vercel.app/api')
   : '/api';
 
-
-
 function App() {
+  // Authentication & Navigation State
+  const [token, setToken] = useState(localStorage.getItem('token') || '');
+  const [username, setUsername] = useState(localStorage.getItem('username') || '');
+  const [currentView, setCurrentView] = useState(localStorage.getItem('token') ? 'dashboard' : 'landing');
+  
+  // Auth Form State
+  const [authForm, setAuthForm] = useState({ username: '', password: '' });
+  const [authError, setAuthError] = useState('');
+  const [authLoading, setAuthLoading] = useState(false);
+
+  // LeetTracker Board State
   const [questions, setQuestions] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [filters, setFilters] = useState({
     search: '',
     topic: 'all',
@@ -61,25 +78,99 @@ function App() {
     }, 3500);
   };
 
-  // Fetch all questions from database on mount
-  const fetchQuestions = async () => {
+  // Fetch questions for authenticated user
+  const fetchQuestions = async (activeToken) => {
+    const targetToken = activeToken || token;
+    if (!targetToken) return;
+
     try {
       setLoading(true);
-      const response = await fetch(`${API_BASE}/questions`);
+      const response = await fetch(`${API_BASE}/questions`, {
+        headers: {
+          'Authorization': `Bearer ${targetToken}`
+        }
+      });
       if (response.ok) {
         const data = await response.json();
         setQuestions(data);
+      } else if (response.status === 401) {
+        // Token expired or invalid
+        handleLogout();
+        showToast("Session expired. Please log in again.", "warning");
       }
     } catch (error) {
       console.error('Error fetching questions:', error);
+      showToast("Could not retrieve questions. Server connection error.", "warning");
     } finally {
       setLoading(false);
     }
   };
 
+  // Fetch on mount/token change
   useEffect(() => {
-    fetchQuestions();
-  }, []);
+    if (token) {
+      fetchQuestions(token);
+    }
+  }, [token]);
+
+  // Auth Handlers
+  const handleAuthSubmit = async (e, type) => {
+    e.preventDefault();
+    setAuthError('');
+    
+    if (!authForm.username.trim() || !authForm.password) {
+      setAuthError('All fields are required.');
+      return;
+    }
+
+    setAuthLoading(true);
+    try {
+      const endpoint = type === 'login' ? 'login' : 'signup';
+      const response = await fetch(`${API_BASE}/auth/${endpoint}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          username: authForm.username.trim(),
+          password: authForm.password
+        })
+      });
+
+      const data = await response.json();
+      if (response.ok) {
+        localStorage.setItem('token', data.token);
+        localStorage.setItem('username', data.user.username);
+        setToken(data.token);
+        setUsername(data.user.username);
+        setAuthForm({ username: '', password: '' });
+        setCurrentView('dashboard');
+        showToast(
+          type === 'login' 
+            ? `Welcome back, ${data.user.username}!` 
+            : `Account created successfully! Welcome, ${data.user.username}!`, 
+          "success"
+        );
+      } else {
+        setAuthError(data.error || 'Authentication failed. Please try again.');
+      }
+    } catch (error) {
+      console.error('Authentication error:', error);
+      setAuthError('Connection failed. Please check if the server is running.');
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('username');
+    setToken('');
+    setUsername('');
+    setQuestions([]);
+    setCurrentView('landing');
+    showToast("Logged out successfully.", "info");
+  };
 
   // Compute stats reactively
   const stats = useMemo(() => {
@@ -130,7 +221,10 @@ function App() {
     try {
       const response = await fetch(`${API_BASE}/questions/${id}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
         body: JSON.stringify({ done: newDoneState })
       });
       if (response.ok) {
@@ -169,11 +263,15 @@ function App() {
     try {
       const response = await fetch(`${API_BASE}/questions`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
         body: JSON.stringify(newQuestion)
       });
       if (response.ok) {
-        setQuestions(prev => [...prev, newQuestion]);
+        const responseData = await response.json();
+        setQuestions(prev => [...prev, responseData.question || newQuestion]);
         setIsAddModalOpen(false);
         setAddForm({ topic: '', name: '', link: '', difficulty: 'Medium' });
         showToast(`"${newQuestion.name}" added successfully!`, "success");
@@ -213,7 +311,10 @@ function App() {
     try {
       const response = await fetch(`${API_BASE}/questions/${editForm.id}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
         body: JSON.stringify(updatedFields)
       });
       if (response.ok) {
@@ -235,7 +336,10 @@ function App() {
 
     try {
       const response = await fetch(`${API_BASE}/questions/${q.id}`, {
-        method: 'DELETE'
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
       });
       if (response.ok) {
         setQuestions(prev => prev.filter(item => item.id !== q.id));
@@ -258,7 +362,10 @@ function App() {
   const handleResetConfirm = async () => {
     try {
       const response = await fetch(`${API_BASE}/questions/reset`, {
-        method: 'POST'
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
       });
       if (response.ok) {
         setQuestions(prev => prev.map(q => ({ ...q, done: false })));
@@ -310,215 +417,369 @@ function App() {
       <header className="main-header">
         <div className="header-container">
           <div className="header-left">
-            <div className="logo-group">
+            <div className="logo-group" onClick={() => !token && setCurrentView('landing')} style={{ cursor: !token ? 'pointer' : 'default' }}>
               <span className="logo-badge">PRO</span>
               <h1>LeetTracker</h1>
             </div>
-            <div className="header-meta">
-              <div className="meta-item">
-                <span className="meta-label">Total Questions</span>
-                <span className="meta-val">{stats.total}</span>
+            
+            {token && currentView === 'dashboard' && (
+              <div className="header-meta">
+                <div className="meta-item">
+                  <span className="meta-label">Total Questions</span>
+                  <span className="meta-val">{stats.total}</span>
+                </div>
+                <div className="meta-item">
+                  <span className="meta-label">Topics Available</span>
+                  <span className="meta-val">{stats.totalTopics}</span>
+                </div>
               </div>
-              <div className="meta-item">
-                <span className="meta-label">Topics Available</span>
-                <span className="meta-val">{stats.totalTopics}</span>
-              </div>
-            </div>
+            )}
           </div>
 
           <div className="header-right">
-            <div className="progress-radial-wrapper">
-              <div className="radial-svg-container">
-                <svg viewBox="0 0 80 80">
-                  <circle className="circle-bg" cx="40" cy="40" r="34" />
-                  <circle 
-                    className="circle-fill" 
-                    cx="40" 
-                    cy="40" 
-                    r="34" 
-                    strokeDasharray={circleCircumference}
-                    strokeDashoffset={strokeDashoffset}
-                  />
-                </svg>
-                <div className="radial-label-inner">
-                  <span className="radial-percent">{stats.percentage}%</span>
-                  <span className="radial-sub">SOLVED</span>
+            {token && currentView === 'dashboard' ? (
+              <div className="header-user-info">
+                {/* Progress Circle */}
+                <div className="progress-radial-wrapper" style={{ marginRight: '1rem' }}>
+                  <div className="radial-svg-container">
+                    <svg viewBox="0 0 80 80">
+                      <circle className="circle-bg" cx="40" cy="40" r="34" />
+                      <circle 
+                        className="circle-fill" 
+                        cx="40" 
+                        cy="40" 
+                        r="34" 
+                        strokeDasharray={circleCircumference}
+                        strokeDashoffset={strokeDashoffset}
+                      />
+                    </svg>
+                    <div className="radial-label-inner">
+                      <span className="radial-percent">{stats.percentage}%</span>
+                      <span className="radial-sub">SOLVED</span>
+                    </div>
+                  </div>
+                  <div className="progress-details">
+                    <span className="progress-fraction">{stats.solved} / {stats.total} Done</span>
+                  </div>
                 </div>
+
+                <span className="username-display">@{username}</span>
+                <button className="btn-logout" onClick={handleLogout} title="Log out from LeetTracker">
+                  <LogOut size={14} style={{ marginRight: '0.4rem' }} /> Log Out
+                </button>
               </div>
-              <div className="progress-details">
-                <span className="progress-fraction">{stats.solved} / {stats.total} Done</span>
+            ) : (
+              <div style={{ display: 'flex', gap: '1rem' }}>
+                <button className="btn btn-secondary" onClick={() => { setAuthError(''); setAuthForm({ username: '', password: '' }); setCurrentView('login'); }}>
+                  Sign In
+                </button>
+                <button className="btn btn-primary" onClick={() => { setAuthError(''); setAuthForm({ username: '', password: '' }); setCurrentView('signup'); }}>
+                  Register
+                </button>
               </div>
-            </div>
+            )}
           </div>
         </div>
       </header>
 
-      {/* Main Board */}
-      <main className="main-content">
-        {/* Difficulty stats panel */}
-        <section className="stats-dashboard">
-          <div className="stat-progress-card difficulty-easy">
-            <div className="card-top">
-              <span className="card-title">Easy Difficulty</span>
-              <span className="card-stats">{stats.difficulty.Easy.solved} / {stats.difficulty.Easy.total}</span>
+      {/* Main Body */}
+      {currentView === 'landing' && (
+        <div className="landing-container">
+          <section className="landing-hero">
+            <span className="logo-badge">INTRODUCING LEETTRACKER 2.0</span>
+            <h2 className="landing-title">Build Your Curated DSA Study Plan</h2>
+            <p className="landing-subtitle">
+              A premium, high-performance web dashboard built for students and professionals to build custom DSA sheets, track revision progress, and enable lightning-fast lookups.
+            </p>
+            <div className="landing-actions">
+              <button className="btn btn-primary" style={{ padding: '1rem 2.5rem', fontSize: '1rem' }} onClick={() => setCurrentView('signup')}>
+                Get Started
+              </button>
+              <button className="btn btn-secondary" style={{ padding: '1rem 2.5rem', fontSize: '1rem' }} onClick={() => setCurrentView('login')}>
+                Sign In to Account
+              </button>
             </div>
-            <div className="progress-bar-bg">
-              <div 
-                className="progress-bar-fill" 
-                style={{ width: `${stats.difficulty.Easy.total > 0 ? (stats.difficulty.Easy.solved / stats.difficulty.Easy.total) * 100 : 0}%` }}
-              ></div>
-            </div>
-          </div>
+          </section>
 
-          <div className="stat-progress-card difficulty-medium">
-            <div className="card-top">
-              <span className="card-title">Medium Difficulty</span>
-              <span className="card-stats">{stats.difficulty.Medium.solved} / {stats.difficulty.Medium.total}</span>
-            </div>
-            <div className="progress-bar-bg">
-              <div 
-                className="progress-bar-fill" 
-                style={{ width: `${stats.difficulty.Medium.total > 0 ? (stats.difficulty.Medium.solved / stats.difficulty.Medium.total) * 100 : 0}%` }}
-              ></div>
-            </div>
-          </div>
-
-          <div className="stat-progress-card difficulty-hard">
-            <div className="card-top">
-              <span className="card-title">Hard Difficulty</span>
-              <span className="card-stats">{stats.difficulty.Hard.solved} / {stats.difficulty.Hard.total}</span>
-            </div>
-            <div className="progress-bar-bg">
-              <div 
-                className="progress-bar-fill" 
-                style={{ width: `${stats.difficulty.Hard.total > 0 ? (stats.difficulty.Hard.solved / stats.difficulty.Hard.total) * 100 : 0}%` }}
-              ></div>
-            </div>
-          </div>
-        </section>
-
-        {/* Toolbar & Filters */}
-        <section className="board-toolbar">
-          <div className="search-wrapper">
-            <Search className="search-icon" size={16} />
-            <input 
-              type="text" 
-              placeholder="Search question name or topic..."
-              value={filters.search}
-              onChange={(e) => setFilters(prev => ({ ...prev, search: e.target.value }))}
-            />
-          </div>
-
-          <div className="filter-options">
-            <select 
-              value={filters.topic}
-              onChange={(e) => setFilters(prev => ({ ...prev, topic: e.target.value }))}
-              className="custom-select"
-            >
-              <option value="all">All Topics</option>
-              {stats.topicsList.map(topic => (
-                <option key={topic} value={topic}>{topic}</option>
-              ))}
-            </select>
-
-            <select 
-              value={filters.difficulty}
-              onChange={(e) => setFilters(prev => ({ ...prev, difficulty: e.target.value }))}
-              className="custom-select"
-            >
-              <option value="all">All Difficulties</option>
-              <option value="Easy">Easy</option>
-              <option value="Medium">Medium</option>
-              <option value="Hard">Hard</option>
-            </select>
-
-            <select 
-              value={filters.status}
-              onChange={(e) => setFilters(prev => ({ ...prev, status: e.target.value }))}
-              className="custom-select"
-            >
-              <option value="all">All Statuses</option>
-              <option value="solved">Solved</option>
-              <option value="unsolved">Unsolved</option>
-            </select>
-
-            <button className="btn btn-primary" onClick={() => setIsAddModalOpen(true)}>
-              <PlusCircle className="mini-icon" size={16} /> Add Question
-            </button>
-
-            <button className="btn btn-secondary text-danger-hover" onClick={() => setIsResetModalOpen(true)}>
-              Reset Progress
-            </button>
-          </div>
-        </section>
-
-        {/* Board View */}
-        <section className="topics-grid">
-          {loading ? (
-            <div className="loading-state">
-              <Loader2 className="spinner" size={32} />
-              <p>Initializing LeetTracker Board...</p>
-            </div>
-          ) : filteredQuestions.length === 0 ? (
-            <div className="empty-state">
-              <FolderOpen className="empty-state-icon" size={48} />
-              <h3>No questions found</h3>
-              <p>Try resetting filters or adding a new question to this board.</p>
-            </div>
-          ) : (
-            <div className="questions-table-container">
-              <div className="questions-table-header">
-                <div className="col-status">Status</div>
-                <div className="col-title">Title</div>
-                <div className="col-topic">Topic</div>
-                <div className="col-difficulty">Difficulty</div>
-                <div className="col-action">Action</div>
+          <section className="features-grid">
+            <div className="feature-card">
+              <div className="feature-icon-wrapper">
+                <Terminal size={24} />
               </div>
-              <div className="questions-table-body">
-                {filteredQuestions.map((q) => (
-                  <div key={q.id} className={`question-row difficulty-${q.difficulty.toLowerCase()} ${q.done ? 'solved' : ''}`}>
-                    <div className="col-status">
-                      <button className="btn-done-toggle" onClick={() => toggleQuestionStatus(q.id)}>
-                        <Check size={12} strokeWidth={4} />
-                      </button>
-                    </div>
-                    
-                    <div className="col-title">
-                      <a 
-                        href={q.link} 
-                        target="_blank" 
-                        rel="noopener noreferrer" 
-                        className="question-link"
-                        title={`Solve '${q.name}' on LeetCode`}
-                      >
-                        <span>{q.name}</span>
-                        <ExternalLink className="question-link-icon" size={14} />
-                      </a>
-                    </div>
-                    
-                    <div className="col-topic">
-                      <span className="topic-badge">{q.topic}</span>
-                    </div>
-                    
-                    <div className="col-difficulty">
-                      <span className={`diff-badge ${q.difficulty.toLowerCase()}`}>{q.difficulty}</span>
-                    </div>
-                    
-                    <div className="col-action">
-                      <button className="btn-edit" title="Edit this question" onClick={() => handleEditClick(q)}>
-                        <Edit size={16} />
-                      </button>
-                      <button className="btn-delete" title="Delete this question" onClick={() => handleDeleteClick(q)}>
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
-                  </div>
+              <h3>Curate Custom Lists</h3>
+              <p>Add your own selected questions, organize them into topics, and build the perfect personal roadmap for your revision goals.</p>
+            </div>
+
+            <div className="feature-card">
+              <div className="feature-icon-wrapper">
+                <Award size={24} />
+              </div>
+              <h3>Progress Isolation</h3>
+              <p>Create a secure account to track your individual solving progress, update difficulty details, and add custom entries.</p>
+            </div>
+
+            <div className="feature-card">
+              <div className="feature-icon-wrapper">
+                <Code size={24} />
+              </div>
+              <h3>Analytical Metrics</h3>
+              <p>Visualize your progress through interactive charts, easy/medium/hard progress bars, and percentage gauges.</p>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {(currentView === 'login' || currentView === 'signup') && (
+        <div className="auth-container">
+          <div className="auth-card">
+            <div className="auth-header">
+              <h2>{currentView === 'login' ? 'Welcome Back' : 'Create Account'}</h2>
+              <p>
+                {currentView === 'login' 
+                  ? 'Sign in to access your custom DSA sheet progress.' 
+                  : 'Start tracking your LeetCode goals with isolated metrics.'}
+              </p>
+            </div>
+
+            <form className="auth-form" onSubmit={(e) => handleAuthSubmit(e, currentView)}>
+              {authError && <div className="auth-error">{authError}</div>}
+              
+              <div className="form-group">
+                <label htmlFor="auth-username">Username</label>
+                <div style={{ position: 'relative' }}>
+                  <input 
+                    type="text" 
+                    id="auth-username" 
+                    placeholder="Enter your username" 
+                    required 
+                    style={{ paddingLeft: '2.5rem', width: '100%' }}
+                    value={authForm.username}
+                    onChange={(e) => setAuthForm(prev => ({ ...prev, username: e.target.value }))}
+                  />
+                  <User size={16} style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-muted)' }} />
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="auth-password">Password</label>
+                <div style={{ position: 'relative' }}>
+                  <input 
+                    type="password" 
+                    id="auth-password" 
+                    placeholder="Enter your password (min 6 chars)" 
+                    required 
+                    style={{ paddingLeft: '2.5rem', width: '100%' }}
+                    value={authForm.password}
+                    onChange={(e) => setAuthForm(prev => ({ ...prev, password: e.target.value }))}
+                  />
+                  <Key size={16} style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-muted)' }} />
+                </div>
+              </div>
+
+              <button type="submit" className="btn btn-primary" style={{ width: '100%', padding: '1rem' }} disabled={authLoading}>
+                {authLoading ? (
+                  <>
+                    <Loader2 size={16} className="spinner" /> Authenticating...
+                  </>
+                ) : (
+                  currentView === 'login' ? 'Access Dashboard' : 'Generate Account'
+                )}
+              </button>
+            </form>
+
+            <div className="auth-footer">
+              {currentView === 'login' ? (
+                <>
+                  New to LeetTracker? 
+                  <span className="auth-link" onClick={() => { setAuthError(''); setAuthForm({ username: '', password: '' }); setCurrentView('signup'); }}>
+                    Create Account
+                  </span>
+                </>
+              ) : (
+                <>
+                  Already registered? 
+                  <span className="auth-link" onClick={() => { setAuthError(''); setAuthForm({ username: '', password: '' }); setCurrentView('login'); }}>
+                    Log In
+                  </span>
+                </>
+              )}
+              <div style={{ marginTop: '1.25rem' }}>
+                <span className="auth-link" style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)' }} onClick={() => setCurrentView('landing')}>
+                  ← Back to Home
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {currentView === 'dashboard' && (
+        <main className="main-content">
+          {/* Difficulty stats panel */}
+          <section className="stats-dashboard">
+            <div className="stat-progress-card difficulty-easy">
+              <div className="card-top">
+                <span className="card-title">Easy Difficulty</span>
+                <span className="card-stats">{stats.difficulty.Easy.solved} / {stats.difficulty.Easy.total}</span>
+              </div>
+              <div className="progress-bar-bg">
+                <div 
+                  className="progress-bar-fill" 
+                  style={{ width: `${stats.difficulty.Easy.total > 0 ? (stats.difficulty.Easy.solved / stats.difficulty.Easy.total) * 100 : 0}%` }}
+                ></div>
+              </div>
+            </div>
+
+            <div className="stat-progress-card difficulty-medium">
+              <div className="card-top">
+                <span className="card-title">Medium Difficulty</span>
+                <span className="card-stats">{stats.difficulty.Medium.solved} / {stats.difficulty.Medium.total}</span>
+              </div>
+              <div className="progress-bar-bg">
+                <div 
+                  className="progress-bar-fill" 
+                  style={{ width: `${stats.difficulty.Medium.total > 0 ? (stats.difficulty.Medium.solved / stats.difficulty.Medium.total) * 100 : 0}%` }}
+                ></div>
+              </div>
+            </div>
+
+            <div className="stat-progress-card difficulty-hard">
+              <div className="card-top">
+                <span className="card-title">Hard Difficulty</span>
+                <span className="card-stats">{stats.difficulty.Hard.solved} / {stats.difficulty.Hard.total}</span>
+              </div>
+              <div className="progress-bar-bg">
+                <div 
+                  className="progress-bar-fill" 
+                  style={{ width: `${stats.difficulty.Hard.total > 0 ? (stats.difficulty.Hard.solved / stats.difficulty.Hard.total) * 100 : 0}%` }}
+                ></div>
+              </div>
+            </div>
+          </section>
+
+          {/* Toolbar & Filters */}
+          <section className="board-toolbar">
+            <div className="search-wrapper">
+              <Search className="search-icon" size={16} />
+              <input 
+                type="text" 
+                placeholder="Search question name or topic..."
+                value={filters.search}
+                onChange={(e) => setFilters(prev => ({ ...prev, search: e.target.value }))}
+              />
+            </div>
+
+            <div className="filter-options">
+              <select 
+                value={filters.topic}
+                onChange={(e) => setFilters(prev => ({ ...prev, topic: e.target.value }))}
+                className="custom-select"
+              >
+                <option value="all">All Topics</option>
+                {stats.topicsList.map(topic => (
+                  <option key={topic} value={topic}>{topic}</option>
                 ))}
-              </div>
+              </select>
+
+              <select 
+                value={filters.difficulty}
+                onChange={(e) => setFilters(prev => ({ ...prev, difficulty: e.target.value }))}
+                className="custom-select"
+              >
+                <option value="all">All Difficulties</option>
+                <option value="Easy">Easy</option>
+                <option value="Medium">Medium</option>
+                <option value="Hard">Hard</option>
+              </select>
+
+              <select 
+                value={filters.status}
+                onChange={(e) => setFilters(prev => ({ ...prev, status: e.target.value }))}
+                className="custom-select"
+              >
+                <option value="all">All Statuses</option>
+                <option value="solved">Solved</option>
+                <option value="unsolved">Unsolved</option>
+              </select>
+
+              <button className="btn btn-primary" onClick={() => setIsAddModalOpen(true)}>
+                <PlusCircle className="mini-icon" size={16} /> Add Question
+              </button>
+
+              <button className="btn btn-secondary text-danger-hover" onClick={() => setIsResetModalOpen(true)}>
+                Reset Progress
+              </button>
             </div>
-          )}
-        </section>
-      </main>
+          </section>
+
+          {/* Board View */}
+          <section className="topics-grid">
+            {loading ? (
+              <div className="loading-state">
+                <Loader2 className="spinner" size={32} />
+                <p>Initializing LeetTracker Board...</p>
+              </div>
+            ) : filteredQuestions.length === 0 ? (
+              <div className="empty-state">
+                <FolderOpen className="empty-state-icon" size={48} />
+                <h3>No questions found</h3>
+                <p>Try resetting filters or adding a new question to this board.</p>
+              </div>
+            ) : (
+              <div className="questions-table-container">
+                <div className="questions-table-header">
+                  <div className="col-status">Status</div>
+                  <div className="col-title">Title</div>
+                  <div className="col-topic">Topic</div>
+                  <div className="col-difficulty">Difficulty</div>
+                  <div className="col-action">Action</div>
+                </div>
+                <div className="questions-table-body">
+                  {filteredQuestions.map((q) => (
+                    <div key={q.id} className={`question-row difficulty-${q.difficulty.toLowerCase()} ${q.done ? 'solved' : ''}`}>
+                      <div className="col-status">
+                        <button className="btn-done-toggle" onClick={() => toggleQuestionStatus(q.id)}>
+                          <Check size={12} strokeWidth={4} />
+                        </button>
+                      </div>
+                      
+                      <div className="col-title">
+                        <a 
+                          href={q.link} 
+                          target="_blank" 
+                          rel="noopener noreferrer" 
+                          className="question-link"
+                          title={`Solve '${q.name}' on LeetCode`}
+                        >
+                          <span>{q.name}</span>
+                          <ExternalLink className="question-link-icon" size={14} />
+                        </a>
+                      </div>
+                      
+                      <div className="col-topic">
+                        <span className="topic-badge">{q.topic}</span>
+                      </div>
+                      
+                      <div className="col-difficulty">
+                        <span className={`diff-badge ${q.difficulty.toLowerCase()}`}>{q.difficulty}</span>
+                      </div>
+                      
+                      <div className="col-action">
+                        <button className="btn-edit" title="Edit this question" onClick={() => handleEditClick(q)}>
+                          <Edit size={16} />
+                        </button>
+                        <button className="btn-delete" title="Delete this question" onClick={() => handleDeleteClick(q)}>
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </section>
+        </main>
+      )}
 
       {/* Footer */}
       <footer className="main-footer">
@@ -607,7 +868,7 @@ function App() {
               </div>
               <div className="modal-footer">
                 <button type="button" className="btn btn-secondary" onClick={() => setIsAddModalOpen(false)}>Cancel</button>
-                <button type="submit" class="btn btn-primary">Save Question</button>
+                <button type="submit" className="btn btn-primary">Save Question</button>
               </div>
             </form>
           </div>
@@ -705,7 +966,7 @@ function App() {
               </button>
             </div>
             <div className="modal-body">
-              <p>This action will reset your progress back to unsolved for all questions in the database.</p>
+              <p>This action will reset your progress back to unsolved for all questions in your sheet.</p>
               <p className="warning-text">Note: This action cannot be undone.</p>
             </div>
             <div className="modal-footer">

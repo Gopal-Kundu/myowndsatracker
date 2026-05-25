@@ -1,6 +1,6 @@
 # LeetTracker — MERN Stack Progress Tracker
 
-A high-performance, premium web application built using the MERN stack (MongoDB, Express, React, Node.js) to track and master the **LeetCode Top Interview 150** study plan. Featuring real-time CRUD operations, dynamic stats visualization, and a sleek, developer-centric dark user interface.
+A high-performance, premium web application built using the MERN stack (MongoDB, Express, React, Node.js) to build custom DSA sheets, track revision progress, and enable lightning-fast lookups. Featuring user authentication, real-time CRUD operations, dynamic stats visualization, and a sleek, developer-centric dark user interface.
 
 ---
 
@@ -13,14 +13,12 @@ DSA Sheet/
 │   ├── package.json          # Backend dependencies (express, mongoose, etc.)
 │   └── server.js             # Mongoose schemas, controllers, and Express routes
 │
-├── frontend/                 # Vite + React Frontend
-│   ├── public/               # Static assets
-│   ├── src/                  # React source files (App.jsx, index.css, main.jsx)
-│   ├── index.html            # Web app entry point & Google Fonts loader
-│   ├── package.json          # React dependencies (lucide-react, react, etc.)
-│   └── vite.config.js        # Vite config with backend proxy setup
-│
-└── questions.json            # Curated list of 150 LeetCode questions
+└── frontend/                 # Vite + React Frontend
+    ├── public/               # Static assets
+    ├── src/                  # React source files (App.jsx, index.css, main.jsx)
+    ├── index.html            # Web app entry point & Google Fonts loader
+    ├── package.json          # React dependencies (lucide-react, react, etc.)
+    └── vite.config.js        # Vite config with backend proxy setup
 ```
 
 ---
@@ -39,9 +37,8 @@ DSA Sheet/
    MONGODB_URI=your_mongodb_connection_string_here
    ```
 
-### 2. Auto-Seeding (Zero-Config Population)
-You don't need to manually import or insert any questions. The backend is configured with an **auto-seeding routine**. 
-When the server connects to MongoDB for the first time, it checks if the database is empty. If it is, it automatically reads the 150 curated questions from `questions.json` in the parent folder and inserts them into your MongoDB database.
+### 2. User-Specific Sheet Initialization
+When a new user registers, the application automatically initializes their account with a default set of DSA problems cloned from the template collection. This gives students and professionals an immediate starting list that they can fully customize, edit, delete, or expand.
 
 ---
 

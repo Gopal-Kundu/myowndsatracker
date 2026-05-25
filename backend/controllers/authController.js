@@ -1,0 +1,114 @@
+const User = require('../models/User');
+const Question = require('../models/Question');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+
+const JWT_SECRET = process.env.JWT_SECRET || 'leetcode_tracker_secret_key_123';
+
+exports.signup = async (req, res) => {
+  try {
+    const { username, password } = req.body;
+
+    if (!username || !password) {
+      return res.status(400).json({ error: 'Username and password are required' });
+    }
+
+    if (password.length < 6) {
+      return res.status(400).json({ error: 'Password must be at least 6 characters long' });
+    }
+
+    // Check if user already exists
+    const existingUser = await User.findOne({ username: username.toLowerCase() });
+    if (existingUser) {
+      return res.status(400).json({ error: 'Username is already taken' });
+    }
+
+    // Hash password
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
+
+    // Create User
+    const newUser = new User({
+      username: username.toLowerCase(),
+      password: hashedPassword,
+      questions: []
+    });
+
+    await newUser.save();
+
+    // Clone default template questions (questions in DB without a user field)
+    const templateQuestions = await Question.find({ user: { $exists: false } });
+    
+    let clonedQuestionIds = [];
+    
+    if (templateQuestions.length > 0) {
+      const clonedQuestionsData = templateQuestions.map(q => ({
+        id: q.id,
+        topic: q.topic,
+        name: q.name,
+        link: q.link,
+        difficulty: q.difficulty,
+        done: false,
+        user: newUser._id
+      }));
+
+      // Insert all cloned questions
+      const insertedQuestions = await Question.insertMany(clonedQuestionsData);
+      clonedQuestionIds = insertedQuestions.map(q => q._id);
+      
+      // Update user with these questions
+      newUser.questions = clonedQuestionIds;
+      await newUser.save();
+    }
+
+    // Generate JWT
+    const token = jwt.sign({ id: newUser._id }, JWT_SECRET, { expiresIn: '7d' });
+
+    res.status(201).json({
+      success: true,
+      token,
+      user: {
+        id: newUser._id,
+        username: newUser.username
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ error: 'Server error during signup', details: error.message });
+  }
+};
+
+exports.login = async (req, res) => {
+  try {
+    const { username, password } = req.body;
+
+    if (!username || !password) {
+      return res.status(400).json({ error: 'Username and password are required' });
+    }
+
+    // Find user
+    const user = await User.findOne({ username: username.toLowerCase() });
+    if (!user) {
+      return res.status(400).json({ error: 'Invalid username or password' });
+    }
+
+    // Check password
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) {
+      return res.status(400).json({ error: 'Invalid username or password' });
+    }
+
+    // Generate JWT
+    const token = jwt.sign({ id: user._id }, JWT_SECRET, { expiresIn: '7d' });
+
+    res.json({
+      success: true,
+      token,
+      user: {
+        id: user._id,
+        username: user.username
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ error: 'Server error during login', details: error.message });
+  }
+};
