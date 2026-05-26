@@ -18,7 +18,10 @@ import {
   Code,
   Award,
   Terminal,
-  Menu
+  Menu,
+  Folder,
+  List,
+  ArrowLeft
 } from 'lucide-react';
 import './App.css';
 import { baseURL } from './config';
@@ -44,6 +47,8 @@ function App() {
     difficulty: 'all',
     status: 'all'
   });
+  const [viewMode, setViewMode] = useState('table'); // 'table' or 'folder'
+  const [activeFolder, setActiveFolder] = useState(null); // name of active topic folder
 
   // Modal States
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -383,6 +388,9 @@ function App() {
         if (filters.topic !== 'all' && !remainingTopics.has(filters.topic)) {
           setFilters(prev => ({ ...prev, topic: 'all' }));
         }
+        if (activeFolder && !remainingTopics.has(activeFolder)) {
+          setActiveFolder(null);
+        }
         showToast(`"${q.name}" has been deleted.`, "warning");
       } else {
         showToast("Failed to delete question.", "warning");
@@ -441,6 +449,39 @@ function App() {
       return a.id.localeCompare(b.id);
     });
   }, [questions, filters]);
+
+  // Grouped questions data for Folders View, responsive to filters
+  const foldersData = useMemo(() => {
+    const folders = {};
+    filteredQuestions.forEach(q => {
+      if (!folders[q.topic]) {
+        folders[q.topic] = {
+          name: q.topic,
+          total: 0,
+          solved: 0,
+          easy: 0,
+          medium: 0,
+          hard: 0
+        };
+      }
+      folders[q.topic].total++;
+      if (q.done) {
+        folders[q.topic].solved++;
+      }
+      if (q.difficulty === 'Easy') folders[q.topic].easy++;
+      else if (q.difficulty === 'Medium') folders[q.topic].medium++;
+      else if (q.difficulty === 'Hard') folders[q.topic].hard++;
+    });
+    return Object.values(folders).sort((a, b) => a.name.localeCompare(b.name));
+  }, [filteredQuestions]);
+
+  // Questions to render in the table (all filtered questions or just the ones in active folder)
+  const questionsToRender = useMemo(() => {
+    if (viewMode === 'folder' && activeFolder) {
+      return filteredQuestions.filter(q => q.topic === activeFolder);
+    }
+    return filteredQuestions;
+  }, [filteredQuestions, viewMode, activeFolder]);
 
   // SVG Circle Stroke offset calculation
   const circleCircumference = 2 * Math.PI * 34; // r=34
@@ -771,10 +812,10 @@ function App() {
             </div>
           </section>
 
-          {/* Toolbar & Filters */}
-          <section className="board-toolbar">
+          {/* Search Bar Row */}
+          <div className="search-section">
             <div className="search-wrapper">
-              <Search className="search-icon" size={16} />
+              <Search className="search-icon" size={18} />
               <input 
                 type="text" 
                 placeholder="Search question name or topic..."
@@ -782,47 +823,76 @@ function App() {
                 onChange={(e) => setFilters(prev => ({ ...prev, search: e.target.value }))}
               />
             </div>
+          </div>
 
+          {/* Toolbar & Filters */}
+          <section className="board-toolbar">
             <div className="filter-options">
-              <select 
-                value={filters.topic}
-                onChange={(e) => setFilters(prev => ({ ...prev, topic: e.target.value }))}
-                className="custom-select"
-              >
-                <option value="all">All Topics</option>
-                {stats.topicsList.map(topic => (
-                  <option key={topic} value={topic}>{topic}</option>
-                ))}
-              </select>
+              <div className="filter-left-group">
+                {/* View Toggle Mode */}
+                <div className="view-toggle-buttons">
+                  <button 
+                    className={`btn-toggle ${viewMode === 'table' ? 'active' : ''}`}
+                    onClick={() => { setViewMode('table'); setActiveFolder(null); }}
+                    title="List View"
+                  >
+                    <List size={14} />
+                    <span>List</span>
+                  </button>
+                  <button 
+                    className={`btn-toggle ${viewMode === 'folder' ? 'active' : ''}`}
+                    onClick={() => { setViewMode('folder'); setActiveFolder(null); }}
+                    title="Folder View"
+                  >
+                    <Folder size={14} />
+                    <span>Folders</span>
+                  </button>
+                </div>
 
-              <select 
-                value={filters.difficulty}
-                onChange={(e) => setFilters(prev => ({ ...prev, difficulty: e.target.value }))}
-                className="custom-select"
-              >
-                <option value="all">All Difficulties</option>
-                <option value="Easy">Easy</option>
-                <option value="Medium">Medium</option>
-                <option value="Hard">Hard</option>
-              </select>
+                {viewMode !== 'folder' && (
+                  <select 
+                    value={filters.topic}
+                    onChange={(e) => setFilters(prev => ({ ...prev, topic: e.target.value }))}
+                    className="custom-select"
+                  >
+                    <option value="all">All Topics</option>
+                    {stats.topicsList.map(topic => (
+                      <option key={topic} value={topic}>{topic}</option>
+                    ))}
+                  </select>
+                )}
 
-              <select 
-                value={filters.status}
-                onChange={(e) => setFilters(prev => ({ ...prev, status: e.target.value }))}
-                className="custom-select"
-              >
-                <option value="all">All Statuses</option>
-                <option value="solved">Solved</option>
-                <option value="unsolved">Unsolved</option>
-              </select>
+                <select 
+                  value={filters.difficulty}
+                  onChange={(e) => setFilters(prev => ({ ...prev, difficulty: e.target.value }))}
+                  className="custom-select"
+                >
+                  <option value="all">All Difficulties</option>
+                  <option value="Easy">Easy</option>
+                  <option value="Medium">Medium</option>
+                  <option value="Hard">Hard</option>
+                </select>
 
-              <button className="btn btn-primary" onClick={() => setIsAddModalOpen(true)}>
-                <PlusCircle className="mini-icon" size={16} /> Add Question
-              </button>
+                <select 
+                  value={filters.status}
+                  onChange={(e) => setFilters(prev => ({ ...prev, status: e.target.value }))}
+                  className="custom-select"
+                >
+                  <option value="all">All Statuses</option>
+                  <option value="solved">Solved</option>
+                  <option value="unsolved">Unsolved</option>
+                </select>
+              </div>
 
-              <button className="btn btn-secondary text-danger-hover" onClick={() => setIsResetModalOpen(true)}>
-                Reset Progress
-              </button>
+              <div className="filter-right-group">
+                <button className="btn btn-primary" onClick={() => setIsAddModalOpen(true)}>
+                  <PlusCircle className="mini-icon" size={16} /> Add Question
+                </button>
+
+                <button className="btn btn-secondary text-danger-hover" onClick={() => setIsResetModalOpen(true)}>
+                  Reset Progress
+                </button>
+              </div>
             </div>
           </section>
 
@@ -833,84 +903,154 @@ function App() {
                 <Loader2 className="spinner" size={32} />
                 <p>Initializing LeetTracker Board...</p>
               </div>
-            ) : filteredQuestions.length === 0 ? (
+            ) : filteredQuestions.length === 0 && viewMode === 'table' ? (
               <div className="empty-state">
                 <FolderOpen className="empty-state-icon" size={48} />
                 <h3>Your DSA revision sheet is empty</h3>
                 <p>Start curating your personal DSA roadmap by clicking the "Add Question" button above.</p>
               </div>
-            ) : (
-              <div className="questions-table-container">
-                <div className="questions-table-header">
-                  <div className="col-status">Status</div>
-                  <div className="col-title">Title</div>
-                  <div className="col-topic">Topic</div>
-                  <div className="col-difficulty">Difficulty</div>
-                  <div className="col-revisions">Revisions</div>
-                  <div className="col-action">Action</div>
+            ) : viewMode === 'folder' && !activeFolder ? (
+              /* Render Folders Grid */
+              foldersData.length === 0 ? (
+                <div className="empty-state">
+                  <FolderOpen className="empty-state-icon" size={48} />
+                  <h3>Your DSA revision sheet is empty</h3>
+                  <p>Start curating your personal DSA roadmap by clicking the "Add Question" button above.</p>
                 </div>
-                <div className="questions-table-body">
-                  {filteredQuestions.map((q) => (
-                    <div key={q.id} className={`question-row difficulty-${q.difficulty.toLowerCase()} ${q.done ? 'solved' : ''}`}>
-                      <div className="col-status">
-                        <button className="btn-done-toggle" onClick={() => toggleQuestionStatus(q.id)}>
-                          <Check size={12} strokeWidth={4} />
-                        </button>
-                      </div>
-                      
-                      <div className="col-title">
-                        <a 
-                          href={q.link} 
-                          target="_blank" 
-                          rel="noopener noreferrer" 
-                          className="question-link"
-                          title={`Solve '${q.name}' on LeetCode`}
-                        >
-                          <span>{q.name}</span>
-                          <ExternalLink className="question-link-icon" size={14} />
-                        </a>
-                      </div>
-                      
-                      <div className="col-topic">
-                        <span className="topic-badge">{q.topic}</span>
-                      </div>
-                      
-                      <div className="col-difficulty">
-                        <span className={`diff-badge ${q.difficulty.toLowerCase()}`}>{q.difficulty}</span>
-                      </div>
-
-                      <div className="col-revisions">
-                        <div className="revisions-counter">
-                          <button 
-                            className="btn-counter btn-counter-minus" 
-                            onClick={() => handleUpdateRevisions(q.id, (q.revisions || 0) - 1)}
-                            disabled={(q.revisions || 0) <= 0}
-                            title="Decrement revisions"
-                          >
-                            -
-                          </button>
-                          <span className="revisions-count">{q.revisions || 0}</span>
-                          <button 
-                            className="btn-counter btn-counter-plus" 
-                            onClick={() => handleUpdateRevisions(q.id, (q.revisions || 0) + 1)}
-                            title="Increment revisions"
-                          >
-                            +
-                          </button>
+              ) : (
+                <div className="folders-grid">
+                  {foldersData.map(folder => {
+                    const percent = folder.total > 0 ? Math.round((folder.solved / folder.total) * 100) : 0;
+                    return (
+                      <div key={folder.name} className="folder-card" onClick={() => setActiveFolder(folder.name)}>
+                        <div className="folder-card-glow"></div>
+                        <div className="folder-card-header">
+                          <div className="folder-icon-wrapper">
+                            <Folder size={32} className="folder-icon" />
+                          </div>
+                          <span className="folder-badge">{folder.total} Qs</span>
+                        </div>
+                        <div className="folder-card-content">
+                          <h3 className="folder-title" title={folder.name}>{folder.name}</h3>
+                          <div className="folder-stats">
+                            <span className="folder-stat-text">{folder.solved}/{folder.total} Solved</span>
+                            <span className="folder-stat-percent">{percent}%</span>
+                          </div>
+                          <div className="folder-progress-bar">
+                            <div className="folder-progress-fill" style={{ width: `${percent}%` }}></div>
+                          </div>
+                          <div className="folder-difficulty-distribution">
+                            {folder.easy > 0 && <span className="dist-badge easy">{folder.easy} Easy</span>}
+                            {folder.medium > 0 && <span className="dist-badge medium">{folder.medium} Med</span>}
+                            {folder.hard > 0 && <span className="dist-badge hard">{folder.hard} Hard</span>}
+                          </div>
                         </div>
                       </div>
-                      
-                      <div className="col-action">
-                        <button className="btn-edit" title="Edit this question" onClick={() => handleEditClick(q)}>
-                          <Edit size={16} />
-                        </button>
-                        <button className="btn-delete" title="Delete this question" onClick={() => handleDeleteClick(q)}>
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
+              )
+            ) : (
+              /* Render Table View (for viewMode === 'table' or activeFolder is set) */
+              <div>
+                {viewMode === 'folder' && activeFolder && (
+                  <div className="folder-detail-header">
+                    <button className="btn btn-secondary btn-back" onClick={() => setActiveFolder(null)}>
+                      <ArrowLeft size={16} /> Back to Folders
+                    </button>
+                    <div className="folder-path">
+                      <span className="path-parent" onClick={() => setActiveFolder(null)}>Folders</span>
+                      <span className="path-separator">/</span>
+                      <span className="path-current">{activeFolder}</span>
+                    </div>
+                  </div>
+                )}
+                
+                {questionsToRender.length === 0 ? (
+                  <div className="empty-state">
+                    <FolderOpen className="empty-state-icon" size={48} />
+                    <h3>No questions found</h3>
+                    <p>No questions match your current search or filter criteria in this view.</p>
+                    <button className="btn btn-secondary" onClick={() => {
+                      setFilters({ search: '', topic: 'all', difficulty: 'all', status: 'all' });
+                    }} style={{ marginTop: '1rem' }}>
+                      Clear Filters
+                    </button>
+                  </div>
+                ) : (
+                  <div className="questions-table-container">
+                    <div className="questions-table-header">
+                      <div className="col-status">Status</div>
+                      <div className="col-title">Title</div>
+                      <div className="col-topic">Topic</div>
+                      <div className="col-difficulty">Difficulty</div>
+                      <div className="col-revisions">Revisions</div>
+                      <div className="col-action">Action</div>
+                    </div>
+                    <div className="questions-table-body">
+                      {questionsToRender.map((q) => (
+                        <div key={q.id} className={`question-row difficulty-${q.difficulty.toLowerCase()} ${q.done ? 'solved' : ''}`}>
+                          <div className="col-status">
+                            <button className="btn-done-toggle" onClick={() => toggleQuestionStatus(q.id)}>
+                              <Check size={12} strokeWidth={4} />
+                            </button>
+                          </div>
+                          
+                          <div className="col-title">
+                            <a 
+                              href={q.link} 
+                              target="_blank" 
+                              rel="noopener noreferrer" 
+                              className="question-link"
+                              title={`Solve '${q.name}' on LeetCode`}
+                            >
+                              <span>{q.name}</span>
+                              <ExternalLink className="question-link-icon" size={14} />
+                            </a>
+                          </div>
+                          
+                          <div className="col-topic">
+                            <span className="topic-badge">{q.topic}</span>
+                          </div>
+                          
+                          <div className="col-difficulty">
+                            <span className={`diff-badge ${q.difficulty.toLowerCase()}`}>{q.difficulty}</span>
+                          </div>
+
+                          <div className="col-revisions">
+                            <div className="revisions-counter">
+                              <button 
+                                className="btn-counter btn-counter-minus" 
+                                onClick={() => handleUpdateRevisions(q.id, (q.revisions || 0) - 1)}
+                                disabled={(q.revisions || 0) <= 0}
+                                title="Decrement revisions"
+                              >
+                                -
+                              </button>
+                              <span className="revisions-count">{q.revisions || 0}</span>
+                              <button 
+                                className="btn-counter btn-counter-plus" 
+                                onClick={() => handleUpdateRevisions(q.id, (q.revisions || 0) + 1)}
+                                title="Increment revisions"
+                              >
+                                +
+                              </button>
+                            </div>
+                          </div>
+                          
+                          <div className="col-action">
+                            <button className="btn-edit" title="Edit this question" onClick={() => handleEditClick(q)}>
+                              <Edit size={16} />
+                            </button>
+                            <button className="btn-delete" title="Delete this question" onClick={() => handleDeleteClick(q)}>
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </section>
