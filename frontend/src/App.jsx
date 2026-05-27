@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import axios from 'axios';
 import { 
   Check, 
   Edit, 
@@ -26,11 +27,13 @@ import {
 import './App.css';
 import { baseURL } from './config';
 
+axios.defaults.withCredentials = true;
+
 function App() {
   // Authentication & Navigation State
-  const [token, setToken] = useState(localStorage.getItem('token') || '');
-  const [username, setUsername] = useState(localStorage.getItem('username') || '');
-  const [currentView, setCurrentView] = useState(localStorage.getItem('token') ? 'dashboard' : 'landing');
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [username, setUsername] = useState('');
+  const [currentView, setCurrentView] = useState('landing');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   
   // Auth Form State
@@ -45,7 +48,8 @@ function App() {
     search: '',
     topic: 'all',
     difficulty: 'all',
-    status: 'all'
+    status: 'all',
+    revisionSort: 'none'
   });
   const [viewMode, setViewMode] = useState('table'); // 'table' or 'folder'
   const [activeFolder, setActiveFolder] = useState(null); // name of active topic folder
@@ -83,39 +87,53 @@ function App() {
   };
 
   // Fetch questions for authenticated user
-  const fetchQuestions = async (activeToken) => {
-    const targetToken = activeToken || token;
-    if (!targetToken) return;
-
+  const fetchQuestions = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`${baseURL}/api/questions`, {
-        headers: {
-          'Authorization': `Bearer ${targetToken}`
-        }
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setQuestions(data);
-      } else if (response.status === 401) {
+      const response = await axios.get(`${baseURL}/api/questions`);
+      setQuestions(response.data);
+    } catch (error) {
+      console.error('Error fetching questions:', error);
+      if (error.response && error.response.status === 401) {
         // Token expired or invalid
         handleLogout();
         showToast("Session expired. Please log in again.", "warning");
+      } else {
+        showToast("Could not retrieve questions. Server connection error.", "warning");
       }
-    } catch (error) {
-      console.error('Error fetching questions:', error);
-      showToast("Could not retrieve questions. Server connection error.", "warning");
     } finally {
       setLoading(false);
     }
   };
 
-  // Fetch on mount/token change
+  // Check auth status on mount
   useEffect(() => {
-    if (token) {
-      fetchQuestions(token);
+    const checkAuthStatus = async () => {
+      try {
+        setLoading(true);
+        const response = await axios.get(`${baseURL}/api/auth/me`);
+        if (response.data.success) {
+          setIsAuthenticated(true);
+          setUsername(response.data.user.username);
+          setCurrentView('dashboard');
+        } else {
+          setCurrentView('landing');
+        }
+      } catch (error) {
+        setCurrentView('landing');
+      } finally {
+        setLoading(false);
+      }
+    };
+    checkAuthStatus();
+  }, []);
+
+  // Fetch questions when user becomes authenticated
+  useEffect(() => {
+    if (isAuthenticated) {
+      fetchQuestions();
     }
-  }, [token]);
+  }, [isAuthenticated]);
 
   // Auth Handlers
   const handleAuthSubmit = async (e, type) => {
@@ -130,46 +148,40 @@ function App() {
     setAuthLoading(true);
     try {
       const endpoint = type === 'login' ? 'login' : 'signup';
-      const response = await fetch(`${baseURL}/api/auth/${endpoint}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          username: authForm.username.trim(),
-          password: authForm.password
-        })
+      const response = await axios.post(`${baseURL}/api/auth/${endpoint}`, {
+        username: authForm.username.trim(),
+        password: authForm.password
       });
 
-      const data = await response.json();
-      if (response.ok) {
-        localStorage.setItem('token', data.token);
-        localStorage.setItem('username', data.user.username);
-        setToken(data.token);
-        setUsername(data.user.username);
-        setAuthForm({ username: '', password: '' });
-        setCurrentView('dashboard');
-        showToast(
-          type === 'login' 
-            ? `Welcome back, ${data.user.username}!` 
-            : `Account created successfully! Welcome, ${data.user.username}!`, 
-          "success"
-        );
-      } else {
-        setAuthError(data.error || 'Authentication failed. Please try again.');
-      }
+      const data = response.data;
+      setIsAuthenticated(true);
+      setUsername(data.user.username);
+      setAuthForm({ username: '', password: '' });
+      setCurrentView('dashboard');
+      showToast(
+        type === 'login' 
+          ? `Welcome back, ${data.user.username}!` 
+          : `Account created successfully! Welcome, ${data.user.username}!`, 
+        "success"
+      );
     } catch (error) {
       console.error('Authentication error:', error);
-      setAuthError('Connection failed. Please check if the server is running.');
+      const errMsg = error.response && error.response.data && error.response.data.error
+        ? error.response.data.error
+        : 'Connection failed. Please check if the server is running.';
+      setAuthError(errMsg);
     } finally {
       setAuthLoading(false);
     }
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('username');
-    setToken('');
+  const handleLogout = async () => {
+    try {
+      await axios.post(`${baseURL}/api/auth/logout`);
+    } catch (error) {
+      console.error('Error during logout on server:', error);
+    }
+    setIsAuthenticated(false);
     setUsername('');
     setQuestions([]);
     setCurrentView('landing');
@@ -224,24 +236,11 @@ function App() {
     setQuestions(prev => prev.map(item => item.id === id ? { ...item, done: newDoneState } : item));
 
     try {
-      const response = await fetch(`${baseURL}/api/questions/${id}`, {
-        method: 'PUT',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ done: newDoneState })
-      });
-      if (response.ok) {
-        if (newDoneState) {
-          showToast(`"${q.name}" marked as completed!`, "success");
-        } else {
-          showToast(`"${q.name}" marked as incomplete.`, "info");
-        }
+      await axios.put(`${baseURL}/api/questions/${id}`, { done: newDoneState });
+      if (newDoneState) {
+        showToast(`"${q.name}" marked as completed!`, "success");
       } else {
-        // Rollback on error
-        setQuestions(prev => prev.map(item => item.id === id ? { ...item, done: !newDoneState } : item));
-        showToast("Failed to update status on server.", "warning");
+        showToast(`"${q.name}" marked as incomplete.`, "info");
       }
     } catch (error) {
       console.error('Failed to update status on server:', error);
@@ -263,21 +262,8 @@ function App() {
     setQuestions(prev => prev.map(item => item.id === id ? { ...item, revisions: newRevisionsVal } : item));
 
     try {
-      const response = await fetch(`${baseURL}/api/questions/${id}`, {
-        method: 'PUT',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ revisions: newRevisionsVal })
-      });
-      if (response.ok) {
-        showToast(`Updated revisions for "${q.name}" to ${newRevisionsVal}.`, "success");
-      } else {
-        // Rollback
-        setQuestions(prev => prev.map(item => item.id === id ? { ...item, revisions: oldRevisions } : item));
-        showToast("Failed to update revisions on server.", "warning");
-      }
+      await axios.put(`${baseURL}/api/questions/${id}`, { revisions: newRevisionsVal });
+      showToast(`Updated revisions for "${q.name}" to ${newRevisionsVal}.`, "success");
     } catch (error) {
       console.error('Failed to update revisions:', error);
       // Rollback
@@ -301,23 +287,11 @@ function App() {
     };
 
     try {
-      const response = await fetch(`${baseURL}/api/questions`, {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(newQuestion)
-      });
-      if (response.ok) {
-        const responseData = await response.json();
-        setQuestions(prev => [...prev, responseData.question || newQuestion]);
-        setIsAddModalOpen(false);
-        setAddForm({ topic: '', name: '', link: '', difficulty: 'Medium' });
-        showToast(`"${newQuestion.name}" added successfully!`, "success");
-      } else {
-        showToast("Failed to add question.", "warning");
-      }
+      const response = await axios.post(`${baseURL}/api/questions`, newQuestion);
+      setQuestions(prev => [...prev, response.data.question || newQuestion]);
+      setIsAddModalOpen(false);
+      setAddForm({ topic: '', name: '', link: '', difficulty: 'Medium' });
+      showToast(`"${newQuestion.name}" added successfully!`, "success");
     } catch (error) {
       console.error('Error adding question:', error);
       showToast("Failed to add question.", "warning");
@@ -349,21 +323,10 @@ function App() {
     };
 
     try {
-      const response = await fetch(`${baseURL}/api/questions/${editForm.id}`, {
-        method: 'PUT',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(updatedFields)
-      });
-      if (response.ok) {
-        setQuestions(prev => prev.map(item => item.id === editForm.id ? { ...item, ...updatedFields } : item));
-        setIsEditModalOpen(false);
-        showToast(`"${updatedFields.name}" updated successfully!`, "success");
-      } else {
-        showToast("Failed to update question.", "warning");
-      }
+      await axios.put(`${baseURL}/api/questions/${editForm.id}`, updatedFields);
+      setQuestions(prev => prev.map(item => item.id === editForm.id ? { ...item, ...updatedFields } : item));
+      setIsEditModalOpen(false);
+      showToast(`"${updatedFields.name}" updated successfully!`, "success");
     } catch (error) {
       console.error('Error editing question:', error);
       showToast("Failed to update question.", "warning");
@@ -375,26 +338,17 @@ function App() {
     if (!window.confirm(`Are you sure you want to delete "${q.name}"?`)) return;
 
     try {
-      const response = await fetch(`${baseURL}/api/questions/${q.id}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-      if (response.ok) {
-        setQuestions(prev => prev.filter(item => item.id !== q.id));
-        // Reset topic filter if that topic was completely deleted
-        const remainingTopics = new Set(questions.filter(item => item.id !== q.id).map(item => item.topic));
-        if (filters.topic !== 'all' && !remainingTopics.has(filters.topic)) {
-          setFilters(prev => ({ ...prev, topic: 'all' }));
-        }
-        if (activeFolder && !remainingTopics.has(activeFolder)) {
-          setActiveFolder(null);
-        }
-        showToast(`"${q.name}" has been deleted.`, "warning");
-      } else {
-        showToast("Failed to delete question.", "warning");
+      await axios.delete(`${baseURL}/api/questions/${q.id}`);
+      setQuestions(prev => prev.filter(item => item.id !== q.id));
+      // Reset topic filter if that topic was completely deleted
+      const remainingTopics = new Set(questions.filter(item => item.id !== q.id).map(item => item.topic));
+      if (filters.topic !== 'all' && !remainingTopics.has(filters.topic)) {
+        setFilters(prev => ({ ...prev, topic: 'all' }));
       }
+      if (activeFolder && !remainingTopics.has(activeFolder)) {
+        setActiveFolder(null);
+      }
+      showToast(`"${q.name}" has been deleted.`, "warning");
     } catch (error) {
       console.error('Error deleting question:', error);
       showToast("Failed to delete question.", "warning");
@@ -404,19 +358,10 @@ function App() {
   // Reset progress handler
   const handleResetConfirm = async () => {
     try {
-      const response = await fetch(`${baseURL}/api/questions/reset`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-      if (response.ok) {
-        setQuestions(prev => prev.map(q => ({ ...q, done: false })));
-        setIsResetModalOpen(false);
-        showToast("All progress has been reset.", "info");
-      } else {
-        showToast("Failed to reset progress.", "warning");
-      }
+      await axios.post(`${baseURL}/api/questions/reset`, {});
+      setQuestions(prev => prev.map(q => ({ ...q, done: false })));
+      setIsResetModalOpen(false);
+      showToast("All progress has been reset.", "info");
     } catch (error) {
       console.error('Error resetting progress:', error);
       showToast("Failed to reset progress.", "warning");
@@ -437,8 +382,23 @@ function App() {
       return matchesSearch && matchesTopic && matchesDifficulty && matchesStatus;
     });
 
-    // Sort questions: original numeric order first, custom string keys at the end
+    // Sort questions: by revision (if selected) or original numeric/string order
     return filtered.sort((a, b) => {
+      if (filters.revisionSort === 'asc') {
+        const revA = a.revisions || 0;
+        const revB = b.revisions || 0;
+        if (revA !== revB) {
+          return revA - revB;
+        }
+      } else if (filters.revisionSort === 'desc') {
+        const revA = a.revisions || 0;
+        const revB = b.revisions || 0;
+        if (revA !== revB) {
+          return revB - revA;
+        }
+      }
+
+      // Default sorting: original numeric order first, custom string keys at the end
       const idA = parseInt(a.id, 10);
       const idB = parseInt(b.id, 10);
       if (!isNaN(idA) && !isNaN(idB)) {
@@ -493,11 +453,11 @@ function App() {
       <header className="main-header">
         <div className="header-container">
           <div className="header-left">
-            <div className="logo-group" onClick={() => !token && setCurrentView('landing')} style={{ cursor: !token ? 'pointer' : 'default' }}>
+            <div className="logo-group" onClick={() => !isAuthenticated && setCurrentView('landing')} style={{ cursor: !isAuthenticated ? 'pointer' : 'default' }}>
               <h1>LeetTracker</h1>
             </div>
             
-            {token && currentView === 'dashboard' && (
+            {isAuthenticated && currentView === 'dashboard' && (
               <div className="header-meta desktop-only">
                 <div className="meta-item">
                   <span className="meta-label">Total Questions</span>
@@ -513,7 +473,7 @@ function App() {
 
           <div className="header-right">
             <div className="desktop-nav">
-              {token && currentView === 'dashboard' ? (
+              {isAuthenticated && currentView === 'dashboard' ? (
                 <div className="header-user-info">
                   {/* Progress Circle */}
                   <div className="progress-radial-wrapper" style={{ marginRight: '1rem' }}>
@@ -578,7 +538,7 @@ function App() {
           </div>
           
           <div className="drawer-body">
-            {token && currentView === 'dashboard' ? (
+            {isAuthenticated && currentView === 'dashboard' ? (
               <div className="drawer-user-section">
                 <div className="drawer-user-meta">
                   <span className="username-display">@{username}</span>
@@ -882,6 +842,16 @@ function App() {
                   <option value="solved">Solved</option>
                   <option value="unsolved">Unsolved</option>
                 </select>
+
+                <select 
+                  value={filters.revisionSort}
+                  onChange={(e) => setFilters(prev => ({ ...prev, revisionSort: e.target.value }))}
+                  className="custom-select"
+                >
+                  <option value="none">Sort by Revisions</option>
+                  <option value="asc">Revisions: Low to High</option>
+                  <option value="desc">Revisions: High to Low</option>
+                </select>
               </div>
 
               <div className="filter-right-group">
@@ -972,7 +942,7 @@ function App() {
                     <h3>No questions found</h3>
                     <p>No questions match your current search or filter criteria in this view.</p>
                     <button className="btn btn-secondary" onClick={() => {
-                      setFilters({ search: '', topic: 'all', difficulty: 'all', status: 'all' });
+                      setFilters({ search: '', topic: 'all', difficulty: 'all', status: 'all', revisionSort: 'none' });
                     }} style={{ marginTop: '1rem' }}>
                       Clear Filters
                     </button>

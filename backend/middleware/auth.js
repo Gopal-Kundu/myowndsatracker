@@ -5,12 +5,19 @@ const JWT_SECRET = process.env.JWT_SECRET || 'leetcode_tracker_secret_key_123';
 
 const auth = async (req, res, next) => {
   try {
-    const authHeader = req.header('Authorization');
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    let token = req.cookies ? req.cookies.token : null;
+
+    if (!token) {
+      const authHeader = req.header('Authorization');
+      if (authHeader && authHeader.startsWith('Bearer ')) {
+        token = authHeader.replace('Bearer ', '');
+      }
+    }
+
+    if (!token) {
       return res.status(401).json({ error: 'No token, authorization denied' });
     }
 
-    const token = authHeader.replace('Bearer ', '');
     const decoded = jwt.verify(token, JWT_SECRET);
     
     const user = await User.findById(decoded.id).select('-password');

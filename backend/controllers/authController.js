@@ -41,6 +41,13 @@ exports.signup = async (req, res) => {
     // Generate JWT
     const token = jwt.sign({ id: newUser._id }, JWT_SECRET, { expiresIn: '7d' });
 
+    res.cookie('token', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+      maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+    });
+
     res.status(201).json({
       success: true,
       token,
@@ -77,6 +84,13 @@ exports.login = async (req, res) => {
     // Generate JWT
     const token = jwt.sign({ id: user._id }, JWT_SECRET, { expiresIn: '7d' });
 
+    res.cookie('token', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+      maxAge: 30 * 24 * 60 * 60 * 1000 // 30 days
+    });
+
     res.json({
       success: true,
       token,
@@ -87,5 +101,28 @@ exports.login = async (req, res) => {
     });
   } catch (error) {
     res.status(500).json({ error: 'Server error during login', details: error.message });
+  }
+};
+
+exports.logout = async (req, res) => {
+  res.clearCookie('token', {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax'
+  });
+  res.json({ success: true, message: 'Logged out successfully' });
+};
+
+exports.getMe = async (req, res) => {
+  try {
+    res.json({
+      success: true,
+      user: {
+        id: req.user._id,
+        username: req.user.username
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ error: 'Server error retrieving user data', details: error.message });
   }
 };
