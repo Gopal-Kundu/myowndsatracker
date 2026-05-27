@@ -1,15 +1,14 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import axios from 'axios';
-import { 
-  Check, 
-  Edit, 
-  Trash2, 
-  PlusCircle, 
-  AlertTriangle, 
-  ExternalLink, 
-  FolderOpen, 
-  Search, 
-  X, 
+import {
+  Check,
+  Edit,
+  Trash2,
+  PlusCircle,
+  AlertTriangle,
+  ExternalLink,
+  FolderOpen,
+  Search,
+  X,
   Loader2,
   LogOut,
   User,
@@ -27,16 +26,13 @@ import {
 import './App.css';
 import { baseURL } from './config';
 
-axios.defaults.withCredentials = true;
-
 function App() {
   // Authentication & Navigation State
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [username, setUsername] = useState('');
-  const [currentView, setCurrentView] = useState('landing');
+  const [token, setToken] = useState(localStorage.getItem('token') || '');
+  const [username, setUsername] = useState(localStorage.getItem('username') || '');
+  const [currentView, setCurrentView] = useState(localStorage.getItem('token') ? 'dashboard' : 'landing');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
-  
+
   // Auth Form State
   const [authForm, setAuthForm] = useState({ username: '', password: '' });
   const [authError, setAuthError] = useState('');
@@ -88,58 +84,45 @@ function App() {
   };
 
   // Fetch questions for authenticated user
-  const fetchQuestions = async () => {
+  const fetchQuestions = async (activeToken) => {
+    const targetToken = activeToken || token;
+    if (!targetToken) return;
+
     try {
       setLoading(true);
-      const response = await axios.get(`${baseURL}/api/questions`);
-      setQuestions(response.data);
-    } catch (error) {
-      console.error('Error fetching questions:', error);
-      if (error.response && error.response.status === 401) {
+      const response = await fetch(`${baseURL}/api/questions`, {
+        headers: {
+          'Authorization': `Bearer ${targetToken}`
+        }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setQuestions(data);
+      } else if (response.status === 401) {
         // Token expired or invalid
         handleLogout();
         showToast("Session expired. Please log in again.", "warning");
-      } else {
-        showToast("Could not retrieve questions. Server connection error.", "warning");
       }
+    } catch (error) {
+      console.error('Error fetching questions:', error);
+      showToast("Could not retrieve questions. Server connection error.", "warning");
     } finally {
       setLoading(false);
     }
   };
 
-  // Check auth status on mount
+  // Fetch on mount/token change
   useEffect(() => {
-    const checkAuthStatus = async () => {
-      try {
-        const response = await axios.get(`${baseURL}/api/auth/me`);
-        if (response.data.success) {
-          setIsAuthenticated(true);
-          setUsername(response.data.user.username);
-          setCurrentView('dashboard');
-        } else {
-          setCurrentView('landing');
-        }
-      } catch (error) {
-        setCurrentView('landing');
-      } finally {
-        setIsCheckingAuth(false);
-      }
-    };
-    checkAuthStatus();
-  }, []);
-
-  // Fetch questions when user becomes authenticated
-  useEffect(() => {
-    if (isAuthenticated) {
-      fetchQuestions();
+    if (token) {
+      fetchQuestions(token);
     }
-  }, [isAuthenticated]);
+  }, [token]);
 
   // Auth Handlers
   const handleAuthSubmit = async (e, type) => {
     e.preventDefault();
     setAuthError('');
-    
+
     if (!authForm.username.trim() || !authForm.password) {
       setAuthError('All fields are required.');
       return;
@@ -148,40 +131,46 @@ function App() {
     setAuthLoading(true);
     try {
       const endpoint = type === 'login' ? 'login' : 'signup';
-      const response = await axios.post(`${baseURL}/api/auth/${endpoint}`, {
-        username: authForm.username.trim(),
-        password: authForm.password
+      const response = await fetch(`${baseURL}/api/auth/${endpoint}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          username: authForm.username.trim(),
+          password: authForm.password
+        })
       });
 
-      const data = response.data;
-      setIsAuthenticated(true);
-      setUsername(data.user.username);
-      setAuthForm({ username: '', password: '' });
-      setCurrentView('dashboard');
-      showToast(
-        type === 'login' 
-          ? `Welcome back, ${data.user.username}!` 
-          : `Account created successfully! Welcome, ${data.user.username}!`, 
-        "success"
-      );
+      const data = await response.json();
+      if (response.ok) {
+        localStorage.setItem('token', data.token);
+        localStorage.setItem('username', data.user.username);
+        setToken(data.token);
+        setUsername(data.user.username);
+        setAuthForm({ username: '', password: '' });
+        setCurrentView('dashboard');
+        showToast(
+          type === 'login'
+            ? `Welcome back, ${data.user.username}!`
+            : `Account created successfully! Welcome, ${data.user.username}!`,
+          "success"
+        );
+      } else {
+        setAuthError(data.error || 'Authentication failed. Please try again.');
+      }
     } catch (error) {
       console.error('Authentication error:', error);
-      const errMsg = error.response && error.response.data && error.response.data.error
-        ? error.response.data.error
-        : 'Connection failed. Please check if the server is running.';
-      setAuthError(errMsg);
+      setAuthError('Connection failed. Please check if the server is running.');
     } finally {
       setAuthLoading(false);
     }
   };
 
-  const handleLogout = async () => {
-    try {
-      await axios.post(`${baseURL}/api/auth/logout`);
-    } catch (error) {
-      console.error('Error during logout on server:', error);
-    }
-    setIsAuthenticated(false);
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('username');
+    setToken('');
     setUsername('');
     setQuestions([]);
     setCurrentView('landing');
@@ -194,7 +183,7 @@ function App() {
     const total = questions.length;
     const solved = questions.filter(q => q.done).length;
     const percentage = total > 0 ? Math.round((solved / total) * 100) : 0;
-    
+
     // Unique topics count
     const uniqueTopics = new Set(questions.map(q => q.topic));
     const totalTopics = uniqueTopics.size;
@@ -231,16 +220,29 @@ function App() {
     if (!q) return;
 
     const newDoneState = !q.done;
-    
+
     // Optimistic UI update
     setQuestions(prev => prev.map(item => item.id === id ? { ...item, done: newDoneState } : item));
 
     try {
-      await axios.put(`${baseURL}/api/questions/${id}`, { done: newDoneState });
-      if (newDoneState) {
-        showToast(`"${q.name}" marked as completed!`, "success");
+      const response = await fetch(`${baseURL}/api/questions/${id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ done: newDoneState })
+      });
+      if (response.ok) {
+        if (newDoneState) {
+          showToast(`"${q.name}" marked as completed!`, "success");
+        } else {
+          showToast(`"${q.name}" marked as incomplete.`, "info");
+        }
       } else {
-        showToast(`"${q.name}" marked as incomplete.`, "info");
+        // Rollback on error
+        setQuestions(prev => prev.map(item => item.id === id ? { ...item, done: !newDoneState } : item));
+        showToast("Failed to update status on server.", "warning");
       }
     } catch (error) {
       console.error('Failed to update status on server:', error);
@@ -262,8 +264,21 @@ function App() {
     setQuestions(prev => prev.map(item => item.id === id ? { ...item, revisions: newRevisionsVal } : item));
 
     try {
-      await axios.put(`${baseURL}/api/questions/${id}`, { revisions: newRevisionsVal });
-      showToast(`Updated revisions for "${q.name}" to ${newRevisionsVal}.`, "success");
+      const response = await fetch(`${baseURL}/api/questions/${id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ revisions: newRevisionsVal })
+      });
+      if (response.ok) {
+        showToast(`Updated revisions for "${q.name}" to ${newRevisionsVal}.`, "success");
+      } else {
+        // Rollback
+        setQuestions(prev => prev.map(item => item.id === id ? { ...item, revisions: oldRevisions } : item));
+        showToast("Failed to update revisions on server.", "warning");
+      }
     } catch (error) {
       console.error('Failed to update revisions:', error);
       // Rollback
@@ -287,11 +302,23 @@ function App() {
     };
 
     try {
-      const response = await axios.post(`${baseURL}/api/questions`, newQuestion);
-      setQuestions(prev => [...prev, response.data.question || newQuestion]);
-      setIsAddModalOpen(false);
-      setAddForm({ topic: '', name: '', link: '', difficulty: 'Medium' });
-      showToast(`"${newQuestion.name}" added successfully!`, "success");
+      const response = await fetch(`${baseURL}/api/questions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(newQuestion)
+      });
+      if (response.ok) {
+        const responseData = await response.json();
+        setQuestions(prev => [...prev, responseData.question || newQuestion]);
+        setIsAddModalOpen(false);
+        setAddForm({ topic: '', name: '', link: '', difficulty: 'Medium' });
+        showToast(`"${newQuestion.name}" added successfully!`, "success");
+      } else {
+        showToast("Failed to add question.", "warning");
+      }
     } catch (error) {
       console.error('Error adding question:', error);
       showToast("Failed to add question.", "warning");
@@ -323,10 +350,21 @@ function App() {
     };
 
     try {
-      await axios.put(`${baseURL}/api/questions/${editForm.id}`, updatedFields);
-      setQuestions(prev => prev.map(item => item.id === editForm.id ? { ...item, ...updatedFields } : item));
-      setIsEditModalOpen(false);
-      showToast(`"${updatedFields.name}" updated successfully!`, "success");
+      const response = await fetch(`${baseURL}/api/questions/${editForm.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(updatedFields)
+      });
+      if (response.ok) {
+        setQuestions(prev => prev.map(item => item.id === editForm.id ? { ...item, ...updatedFields } : item));
+        setIsEditModalOpen(false);
+        showToast(`"${updatedFields.name}" updated successfully!`, "success");
+      } else {
+        showToast("Failed to update question.", "warning");
+      }
     } catch (error) {
       console.error('Error editing question:', error);
       showToast("Failed to update question.", "warning");
@@ -338,17 +376,26 @@ function App() {
     if (!window.confirm(`Are you sure you want to delete "${q.name}"?`)) return;
 
     try {
-      await axios.delete(`${baseURL}/api/questions/${q.id}`);
-      setQuestions(prev => prev.filter(item => item.id !== q.id));
-      // Reset topic filter if that topic was completely deleted
-      const remainingTopics = new Set(questions.filter(item => item.id !== q.id).map(item => item.topic));
-      if (filters.topic !== 'all' && !remainingTopics.has(filters.topic)) {
-        setFilters(prev => ({ ...prev, topic: 'all' }));
+      const response = await fetch(`${baseURL}/api/questions/${q.id}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      if (response.ok) {
+        setQuestions(prev => prev.filter(item => item.id !== q.id));
+        // Reset topic filter if that topic was completely deleted
+        const remainingTopics = new Set(questions.filter(item => item.id !== q.id).map(item => item.topic));
+        if (filters.topic !== 'all' && !remainingTopics.has(filters.topic)) {
+          setFilters(prev => ({ ...prev, topic: 'all' }));
+        }
+        if (activeFolder && !remainingTopics.has(activeFolder)) {
+          setActiveFolder(null);
+        }
+        showToast(`"${q.name}" has been deleted.`, "warning");
+      } else {
+        showToast("Failed to delete question.", "warning");
       }
-      if (activeFolder && !remainingTopics.has(activeFolder)) {
-        setActiveFolder(null);
-      }
-      showToast(`"${q.name}" has been deleted.`, "warning");
     } catch (error) {
       console.error('Error deleting question:', error);
       showToast("Failed to delete question.", "warning");
@@ -358,10 +405,19 @@ function App() {
   // Reset progress handler
   const handleResetConfirm = async () => {
     try {
-      await axios.post(`${baseURL}/api/questions/reset`, {});
-      setQuestions(prev => prev.map(q => ({ ...q, done: false })));
-      setIsResetModalOpen(false);
-      showToast("All progress has been reset.", "info");
+      const response = await fetch(`${baseURL}/api/questions/reset`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      if (response.ok) {
+        setQuestions(prev => prev.map(q => ({ ...q, done: false })));
+        setIsResetModalOpen(false);
+        showToast("All progress has been reset.", "info");
+      } else {
+        showToast("Failed to reset progress.", "warning");
+      }
     } catch (error) {
       console.error('Error resetting progress:', error);
       showToast("Failed to reset progress.", "warning");
@@ -371,14 +427,14 @@ function App() {
   // Filtered questions
   const filteredQuestions = useMemo(() => {
     const searchLower = filters.search.toLowerCase();
-    
+
     const filtered = questions.filter(q => {
       const matchesSearch = q.name.toLowerCase().includes(searchLower) || q.topic.toLowerCase().includes(searchLower);
       const matchesTopic = filters.topic === 'all' || q.topic === filters.topic;
       const matchesDifficulty = filters.difficulty === 'all' || q.difficulty === filters.difficulty;
-      const matchesStatus = filters.status === 'all' || 
-                            (filters.status === 'solved' && q.done) || 
-                            (filters.status === 'unsolved' && !q.done);
+      const matchesStatus = filters.status === 'all' ||
+        (filters.status === 'solved' && q.done) ||
+        (filters.status === 'unsolved' && !q.done);
       return matchesSearch && matchesTopic && matchesDifficulty && matchesStatus;
     });
 
@@ -447,28 +503,17 @@ function App() {
   const circleCircumference = 2 * Math.PI * 34; // r=34
   const strokeDashoffset = circleCircumference - (stats.percentage / 100) * circleCircumference;
 
-  if (isCheckingAuth) {
-    return (
-      <div className="app-container animate-fade-in" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', background: 'var(--color-bg)' }}>
-        <div style={{ textAlign: 'center' }}>
-          <Loader2 className="spinner" size={48} style={{ color: 'var(--color-primary)', marginBottom: '1rem' }} />
-          <p style={{ color: 'var(--color-text-muted)', fontFamily: 'Inter, sans-serif', fontSize: '0.95rem' }}>Loading LeetTracker...</p>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="app-container">
       {/* Header */}
       <header className="main-header">
         <div className="header-container">
           <div className="header-left">
-            <div className="logo-group" onClick={() => !isAuthenticated && setCurrentView('landing')} style={{ cursor: !isAuthenticated ? 'pointer' : 'default' }}>
+            <div className="logo-group" onClick={() => !token && setCurrentView('landing')} style={{ cursor: !token ? 'pointer' : 'default' }}>
               <h1>LeetTracker</h1>
             </div>
-            
-            {isAuthenticated && currentView === 'dashboard' && (
+
+            {token && currentView === 'dashboard' && (
               <div className="header-meta desktop-only">
                 <div className="meta-item">
                   <span className="meta-label">Total Questions</span>
@@ -484,18 +529,18 @@ function App() {
 
           <div className="header-right">
             <div className="desktop-nav">
-              {isAuthenticated && currentView === 'dashboard' ? (
+              {token && currentView === 'dashboard' ? (
                 <div className="header-user-info">
                   {/* Progress Circle */}
                   <div className="progress-radial-wrapper" style={{ marginRight: '1rem' }}>
                     <div className="radial-svg-container">
                       <svg viewBox="0 0 80 80">
                         <circle className="circle-bg" cx="40" cy="40" r="34" />
-                        <circle 
-                          className="circle-fill" 
-                          cx="40" 
-                          cy="40" 
-                          r="34" 
+                        <circle
+                          className="circle-fill"
+                          cx="40"
+                          cy="40"
+                          r="34"
                           strokeDasharray={circleCircumference}
                           strokeDashoffset={strokeDashoffset}
                         />
@@ -547,24 +592,24 @@ function App() {
               <X size={20} />
             </button>
           </div>
-          
+
           <div className="drawer-body">
-            {isAuthenticated && currentView === 'dashboard' ? (
+            {token && currentView === 'dashboard' ? (
               <div className="drawer-user-section">
                 <div className="drawer-user-meta">
                   <span className="username-display">@{username}</span>
                 </div>
-                
+
                 {/* Progress Circle in Drawer */}
                 <div className="progress-radial-wrapper drawer-progress">
                   <div className="radial-svg-container">
                     <svg viewBox="0 0 80 80">
                       <circle className="circle-bg" cx="40" cy="40" r="34" />
-                      <circle 
-                        className="circle-fill" 
-                        cx="40" 
-                        cy="40" 
-                        r="34" 
+                      <circle
+                        className="circle-fill"
+                        cx="40"
+                        cy="40"
+                        r="34"
                         strokeDasharray={circleCircumference}
                         strokeDashoffset={strokeDashoffset}
                       />
@@ -612,7 +657,7 @@ function App() {
       {currentView === 'landing' && (
         <div className="landing-container">
           <section className="landing-hero">
-            
+
             <h2 className="landing-title">Build Your Curated DSA Study Plan</h2>
             <p className="landing-subtitle">
               A premium, high-performance web dashboard built for students and professionals to build custom DSA sheets, track revision progress, and enable lightning-fast lookups.
@@ -661,23 +706,23 @@ function App() {
             <div className="auth-header">
               <h2>{currentView === 'login' ? 'Welcome Back' : 'Create Account'}</h2>
               <p>
-                {currentView === 'login' 
-                  ? 'Sign in to access your custom DSA sheet progress.' 
+                {currentView === 'login'
+                  ? 'Sign in to access your custom DSA sheet progress.'
                   : 'Start tracking your LeetCode goals with isolated metrics.'}
               </p>
             </div>
 
             <form className="auth-form" onSubmit={(e) => handleAuthSubmit(e, currentView)}>
               {authError && <div className="auth-error">{authError}</div>}
-              
+
               <div className="form-group">
                 <label htmlFor="auth-username">Username</label>
                 <div style={{ position: 'relative' }}>
-                  <input 
-                    type="text" 
-                    id="auth-username" 
-                    placeholder="Enter your username" 
-                    required 
+                  <input
+                    type="text"
+                    id="auth-username"
+                    placeholder="Enter your username"
+                    required
                     style={{ paddingLeft: '2.5rem', width: '100%' }}
                     value={authForm.username}
                     onChange={(e) => setAuthForm(prev => ({ ...prev, username: e.target.value }))}
@@ -689,11 +734,11 @@ function App() {
               <div className="form-group">
                 <label htmlFor="auth-password">Password</label>
                 <div style={{ position: 'relative' }}>
-                  <input 
-                    type="password" 
-                    id="auth-password" 
-                    placeholder="Enter your password (min 6 chars)" 
-                    required 
+                  <input
+                    type="password"
+                    id="auth-password"
+                    placeholder="Enter your password (min 6 chars)"
+                    required
                     style={{ paddingLeft: '2.5rem', width: '100%' }}
                     value={authForm.password}
                     onChange={(e) => setAuthForm(prev => ({ ...prev, password: e.target.value }))}
@@ -716,14 +761,14 @@ function App() {
             <div className="auth-footer">
               {currentView === 'login' ? (
                 <>
-                  New to LeetTracker? 
+                  New to LeetTracker?
                   <span className="auth-link" onClick={() => { setAuthError(''); setAuthForm({ username: '', password: '' }); setCurrentView('signup'); }}>
                     Create Account
                   </span>
                 </>
               ) : (
                 <>
-                  Already registered? 
+                  Already registered?
                   <span className="auth-link" onClick={() => { setAuthError(''); setAuthForm({ username: '', password: '' }); setCurrentView('login'); }}>
                     Log In
                   </span>
@@ -749,8 +794,8 @@ function App() {
                 <span className="card-stats">{stats.difficulty.Easy.solved} / {stats.difficulty.Easy.total}</span>
               </div>
               <div className="progress-bar-bg">
-                <div 
-                  className="progress-bar-fill" 
+                <div
+                  className="progress-bar-fill"
                   style={{ width: `${stats.difficulty.Easy.total > 0 ? (stats.difficulty.Easy.solved / stats.difficulty.Easy.total) * 100 : 0}%` }}
                 ></div>
               </div>
@@ -762,8 +807,8 @@ function App() {
                 <span className="card-stats">{stats.difficulty.Medium.solved} / {stats.difficulty.Medium.total}</span>
               </div>
               <div className="progress-bar-bg">
-                <div 
-                  className="progress-bar-fill" 
+                <div
+                  className="progress-bar-fill"
                   style={{ width: `${stats.difficulty.Medium.total > 0 ? (stats.difficulty.Medium.solved / stats.difficulty.Medium.total) * 100 : 0}%` }}
                 ></div>
               </div>
@@ -775,8 +820,8 @@ function App() {
                 <span className="card-stats">{stats.difficulty.Hard.solved} / {stats.difficulty.Hard.total}</span>
               </div>
               <div className="progress-bar-bg">
-                <div 
-                  className="progress-bar-fill" 
+                <div
+                  className="progress-bar-fill"
                   style={{ width: `${stats.difficulty.Hard.total > 0 ? (stats.difficulty.Hard.solved / stats.difficulty.Hard.total) * 100 : 0}%` }}
                 ></div>
               </div>
@@ -787,8 +832,8 @@ function App() {
           <div className="search-section">
             <div className="search-wrapper">
               <Search className="search-icon" size={18} />
-              <input 
-                type="text" 
+              <input
+                type="text"
                 placeholder="Search question name or topic..."
                 value={filters.search}
                 onChange={(e) => setFilters(prev => ({ ...prev, search: e.target.value }))}
@@ -802,7 +847,7 @@ function App() {
               <div className="filter-left-group">
                 {/* View Toggle Mode */}
                 <div className="view-toggle-buttons">
-                  <button 
+                  <button
                     className={`btn-toggle ${viewMode === 'table' ? 'active' : ''}`}
                     onClick={() => { setViewMode('table'); setActiveFolder(null); }}
                     title="List View"
@@ -810,7 +855,7 @@ function App() {
                     <List size={14} />
                     <span>List</span>
                   </button>
-                  <button 
+                  <button
                     className={`btn-toggle ${viewMode === 'folder' ? 'active' : ''}`}
                     onClick={() => { setViewMode('folder'); setActiveFolder(null); }}
                     title="Folder View"
@@ -821,7 +866,7 @@ function App() {
                 </div>
 
                 {viewMode !== 'folder' && (
-                  <select 
+                  <select
                     value={filters.topic}
                     onChange={(e) => setFilters(prev => ({ ...prev, topic: e.target.value }))}
                     className="custom-select"
@@ -833,7 +878,7 @@ function App() {
                   </select>
                 )}
 
-                <select 
+                <select
                   value={filters.difficulty}
                   onChange={(e) => setFilters(prev => ({ ...prev, difficulty: e.target.value }))}
                   className="custom-select"
@@ -844,7 +889,7 @@ function App() {
                   <option value="Hard">Hard</option>
                 </select>
 
-                <select 
+                <select
                   value={filters.status}
                   onChange={(e) => setFilters(prev => ({ ...prev, status: e.target.value }))}
                   className="custom-select"
@@ -854,7 +899,7 @@ function App() {
                   <option value="unsolved">Unsolved</option>
                 </select>
 
-                <select 
+                <select
                   value={filters.revisionSort}
                   onChange={(e) => setFilters(prev => ({ ...prev, revisionSort: e.target.value }))}
                   className="custom-select"
@@ -946,7 +991,7 @@ function App() {
                     </div>
                   </div>
                 )}
-                
+
                 {questionsToRender.length === 0 ? (
                   <div className="empty-state">
                     <FolderOpen className="empty-state-icon" size={48} />
@@ -976,12 +1021,12 @@ function App() {
                               <Check size={12} strokeWidth={4} />
                             </button>
                           </div>
-                          
+
                           <div className="col-title">
-                            <a 
-                              href={q.link} 
-                              target="_blank" 
-                              rel="noopener noreferrer" 
+                            <a
+                              href={q.link}
+                              target="_blank"
+                              rel="noopener noreferrer"
                               className="question-link"
                               title={`Solve '${q.name}' on LeetCode`}
                             >
@@ -989,19 +1034,19 @@ function App() {
                               <ExternalLink className="question-link-icon" size={14} />
                             </a>
                           </div>
-                          
+
                           <div className="col-topic">
                             <span className="topic-badge">{q.topic}</span>
                           </div>
-                          
+
                           <div className="col-difficulty">
                             <span className={`diff-badge ${q.difficulty.toLowerCase()}`}>{q.difficulty}</span>
                           </div>
 
                           <div className="col-revisions">
                             <div className="revisions-counter">
-                              <button 
-                                className="btn-counter btn-counter-minus" 
+                              <button
+                                className="btn-counter btn-counter-minus"
                                 onClick={() => handleUpdateRevisions(q.id, (q.revisions || 0) - 1)}
                                 disabled={(q.revisions || 0) <= 0}
                                 title="Decrement revisions"
@@ -1009,8 +1054,8 @@ function App() {
                                 -
                               </button>
                               <span className="revisions-count">{q.revisions || 0}</span>
-                              <button 
-                                className="btn-counter btn-counter-plus" 
+                              <button
+                                className="btn-counter btn-counter-plus"
                                 onClick={() => handleUpdateRevisions(q.id, (q.revisions || 0) + 1)}
                                 title="Increment revisions"
                               >
@@ -1018,7 +1063,7 @@ function App() {
                               </button>
                             </div>
                           </div>
-                          
+
                           <div className="col-action">
                             <button className="btn-edit" title="Edit this question" onClick={() => handleEditClick(q)}>
                               <Edit size={16} />
@@ -1062,11 +1107,11 @@ function App() {
               <div className="modal-body">
                 <div className="form-group">
                   <label htmlFor="input-topic">Topic Name</label>
-                  <input 
-                    type="text" 
-                    id="input-topic" 
-                    placeholder="e.g., Arrays & Hashing, Trees..." 
-                    required 
+                  <input
+                    type="text"
+                    id="input-topic"
+                    placeholder="e.g., Arrays & Hashing, Trees..."
+                    required
                     list="existing-topics-react"
                     value={addForm.topic}
                     onChange={(e) => setAddForm(prev => ({ ...prev, topic: e.target.value }))}
@@ -1081,10 +1126,10 @@ function App() {
 
                 <div className="form-group">
                   <label htmlFor="input-name">Question Title</label>
-                  <input 
-                    type="text" 
-                    id="input-name" 
-                    placeholder="e.g., Two Sum, Reverse Linked List" 
+                  <input
+                    type="text"
+                    id="input-name"
+                    placeholder="e.g., Two Sum, Reverse Linked List"
                     required
                     value={addForm.name}
                     onChange={(e) => setAddForm(prev => ({ ...prev, name: e.target.value }))}
@@ -1093,10 +1138,10 @@ function App() {
 
                 <div className="form-group">
                   <label htmlFor="input-link">Question Link (URL)</label>
-                  <input 
-                    type="url" 
-                    id="input-link" 
-                    placeholder="https://leetcode.com/problems/..." 
+                  <input
+                    type="url"
+                    id="input-link"
+                    placeholder="https://leetcode.com/problems/..."
                     required
                     value={addForm.link}
                     onChange={(e) => setAddForm(prev => ({ ...prev, link: e.target.value }))}
@@ -1105,9 +1150,9 @@ function App() {
 
                 <div className="form-group">
                   <label htmlFor="input-difficulty">Difficulty</label>
-                  <select 
-                    id="input-difficulty" 
-                    className="custom-select" 
+                  <select
+                    id="input-difficulty"
+                    className="custom-select"
                     required
                     value={addForm.difficulty}
                     onChange={(e) => setAddForm(prev => ({ ...prev, difficulty: e.target.value }))}
@@ -1144,11 +1189,11 @@ function App() {
               <div className="modal-body">
                 <div className="form-group">
                   <label htmlFor="edit-topic">Topic Name</label>
-                  <input 
-                    type="text" 
-                    id="edit-topic" 
-                    placeholder="e.g., Arrays & Hashing, Trees..." 
-                    required 
+                  <input
+                    type="text"
+                    id="edit-topic"
+                    placeholder="e.g., Arrays & Hashing, Trees..."
+                    required
                     list="existing-topics-react"
                     value={editForm.topic}
                     onChange={(e) => setEditForm(prev => ({ ...prev, topic: e.target.value }))}
@@ -1158,10 +1203,10 @@ function App() {
 
                 <div className="form-group">
                   <label htmlFor="edit-name">Question Title</label>
-                  <input 
-                    type="text" 
-                    id="edit-name" 
-                    placeholder="e.g., Two Sum, Reverse Linked List" 
+                  <input
+                    type="text"
+                    id="edit-name"
+                    placeholder="e.g., Two Sum, Reverse Linked List"
                     required
                     value={editForm.name}
                     onChange={(e) => setEditForm(prev => ({ ...prev, name: e.target.value }))}
@@ -1170,10 +1215,10 @@ function App() {
 
                 <div className="form-group">
                   <label htmlFor="edit-link">Question Link (URL)</label>
-                  <input 
-                    type="url" 
-                    id="edit-link" 
-                    placeholder="https://leetcode.com/problems/..." 
+                  <input
+                    type="url"
+                    id="edit-link"
+                    placeholder="https://leetcode.com/problems/..."
                     required
                     value={editForm.link}
                     onChange={(e) => setEditForm(prev => ({ ...prev, link: e.target.value }))}
@@ -1182,9 +1227,9 @@ function App() {
 
                 <div className="form-group">
                   <label htmlFor="edit-difficulty">Difficulty</label>
-                  <select 
-                    id="edit-difficulty" 
-                    className="custom-select" 
+                  <select
+                    id="edit-difficulty"
+                    className="custom-select"
                     required
                     value={editForm.difficulty}
                     onChange={(e) => setEditForm(prev => ({ ...prev, difficulty: e.target.value }))}
