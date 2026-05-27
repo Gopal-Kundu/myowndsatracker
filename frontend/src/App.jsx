@@ -35,6 +35,7 @@ function App() {
   const [username, setUsername] = useState('');
   const [currentView, setCurrentView] = useState('landing');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   
   // Auth Form State
   const [authForm, setAuthForm] = useState({ username: '', password: '' });
@@ -110,7 +111,6 @@ function App() {
   useEffect(() => {
     const checkAuthStatus = async () => {
       try {
-        setLoading(true);
         const response = await axios.get(`${baseURL}/api/auth/me`);
         if (response.data.success) {
           setIsAuthenticated(true);
@@ -122,7 +122,7 @@ function App() {
       } catch (error) {
         setCurrentView('landing');
       } finally {
-        setLoading(false);
+        setIsCheckingAuth(false);
       }
     };
     checkAuthStatus();
@@ -446,6 +446,17 @@ function App() {
   // SVG Circle Stroke offset calculation
   const circleCircumference = 2 * Math.PI * 34; // r=34
   const strokeDashoffset = circleCircumference - (stats.percentage / 100) * circleCircumference;
+
+  if (isCheckingAuth) {
+    return (
+      <div className="app-container animate-fade-in" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', background: 'var(--color-bg)' }}>
+        <div style={{ textAlign: 'center' }}>
+          <Loader2 className="spinner" size={48} style={{ color: 'var(--color-primary)', marginBottom: '1rem' }} />
+          <p style={{ color: 'var(--color-text-muted)', fontFamily: 'Inter, sans-serif', fontSize: '0.95rem' }}>Loading LeetTracker...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="app-container">
