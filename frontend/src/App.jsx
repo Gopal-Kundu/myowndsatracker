@@ -21,7 +21,8 @@ import {
   Menu,
   Folder,
   List,
-  ArrowLeft
+  ArrowLeft,
+  Youtube
 } from 'lucide-react';
 import './App.css';
 import { baseURL } from './config';
@@ -61,7 +62,8 @@ function App() {
     topic: '',
     name: '',
     link: '',
-    difficulty: 'Medium'
+    difficulty: 'Medium',
+    youtube: ''
   });
 
   const [editForm, setEditForm] = useState({
@@ -69,7 +71,8 @@ function App() {
     topic: '',
     name: '',
     link: '',
-    difficulty: 'Medium'
+    difficulty: 'Medium',
+    youtube: ''
   });
 
   // Toast Notification State
@@ -298,6 +301,7 @@ function App() {
       name: addForm.name.trim(),
       link: addForm.link.trim(),
       difficulty: addForm.difficulty,
+      youtube: addForm.youtube.trim(),
       done: false
     };
 
@@ -314,7 +318,7 @@ function App() {
         const responseData = await response.json();
         setQuestions(prev => [...prev, responseData.question || newQuestion]);
         setIsAddModalOpen(false);
-        setAddForm({ topic: '', name: '', link: '', difficulty: 'Medium' });
+        setAddForm({ topic: '', name: '', link: '', difficulty: 'Medium', youtube: '' });
         showToast(`"${newQuestion.name}" added successfully!`, "success");
       } else {
         showToast("Failed to add question.", "warning");
@@ -332,7 +336,8 @@ function App() {
       topic: q.topic,
       name: q.name,
       link: q.link,
-      difficulty: q.difficulty
+      difficulty: q.difficulty,
+      youtube: q.youtube || ''
     });
     setIsEditModalOpen(true);
   };
@@ -346,7 +351,8 @@ function App() {
       topic: editForm.topic.trim(),
       name: editForm.name.trim(),
       link: editForm.link.trim(),
-      difficulty: editForm.difficulty
+      difficulty: editForm.difficulty,
+      youtube: editForm.youtube.trim()
     };
 
     try {
@@ -1010,6 +1016,7 @@ function App() {
                       <div className="col-title">Title</div>
                       <div className="col-topic">Topic</div>
                       <div className="col-difficulty">Difficulty</div>
+                      <div className="col-youtube">YouTube</div>
                       <div className="col-revisions">Revisions</div>
                       <div className="col-action">Action</div>
                     </div>
@@ -1041,6 +1048,20 @@ function App() {
 
                           <div className="col-difficulty">
                             <span className={`diff-badge ${q.difficulty.toLowerCase()}`}>{q.difficulty}</span>
+                          </div>
+
+                          <div className="col-youtube">
+                            {q.youtube ? (
+                              <a
+                                href={q.youtube}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="youtube-link"
+                                title="Watch solution on YouTube"
+                              >
+                                <Youtube size={18} />
+                              </a>
+                            ) : "N/A"}
                           </div>
 
                           <div className="col-revisions">
@@ -1105,62 +1126,90 @@ function App() {
             </div>
             <form onSubmit={handleAddSubmit}>
               <div className="modal-body">
-                <div className="form-group">
-                  <label htmlFor="input-topic">Topic Name</label>
-                  <input
-                    type="text"
-                    id="input-topic"
-                    placeholder="e.g., Arrays & Hashing, Trees..."
-                    required
-                    list="existing-topics-react"
-                    value={addForm.topic}
-                    onChange={(e) => setAddForm(prev => ({ ...prev, topic: e.target.value }))}
-                  />
-                  <datalist id="existing-topics-react">
-                    {stats.topicsList.map(topic => (
-                      <option key={topic} value={topic} />
-                    ))}
-                  </datalist>
-                  <span className="input-helper">Select an existing topic or type a new one.</span>
-                </div>
+                <div className="modal-form-grid">
+                  <div className="form-group grid-full">
+                    <label htmlFor="input-name" className="form-label-with-icon">
+                      <Code size={14} />
+                      <span>Question Title</span>
+                    </label>
+                    <input
+                      type="text"
+                      id="input-name"
+                      placeholder="e.g., Two Sum, Reverse Linked List"
+                      required
+                      value={addForm.name}
+                      onChange={(e) => setAddForm(prev => ({ ...prev, name: e.target.value }))}
+                    />
+                  </div>
 
-                <div className="form-group">
-                  <label htmlFor="input-name">Question Title</label>
-                  <input
-                    type="text"
-                    id="input-name"
-                    placeholder="e.g., Two Sum, Reverse Linked List"
-                    required
-                    value={addForm.name}
-                    onChange={(e) => setAddForm(prev => ({ ...prev, name: e.target.value }))}
-                  />
-                </div>
+                  <div className="form-group">
+                    <label htmlFor="input-topic" className="form-label-with-icon">
+                      <FolderOpen size={14} />
+                      <span>Topic Name</span>
+                    </label>
+                    <input
+                      type="text"
+                      id="input-topic"
+                      placeholder="e.g., Arrays & Hashing..."
+                      required
+                      list="existing-topics-react"
+                      value={addForm.topic}
+                      onChange={(e) => setAddForm(prev => ({ ...prev, topic: e.target.value }))}
+                    />
+                    <datalist id="existing-topics-react">
+                      {stats.topicsList.map(topic => (
+                        <option key={topic} value={topic} />
+                      ))}
+                    </datalist>
+                    <span className="input-helper">Select or type a new topic.</span>
+                  </div>
 
-                <div className="form-group">
-                  <label htmlFor="input-link">Question Link (URL)</label>
-                  <input
-                    type="url"
-                    id="input-link"
-                    placeholder="https://leetcode.com/problems/..."
-                    required
-                    value={addForm.link}
-                    onChange={(e) => setAddForm(prev => ({ ...prev, link: e.target.value }))}
-                  />
-                </div>
+                  <div className="form-group">
+                    <label htmlFor="input-difficulty" className="form-label-with-icon">
+                      <Award size={14} />
+                      <span>Difficulty</span>
+                    </label>
+                    <select
+                      id="input-difficulty"
+                      className="custom-select"
+                      required
+                      value={addForm.difficulty}
+                      onChange={(e) => setAddForm(prev => ({ ...prev, difficulty: e.target.value }))}
+                    >
+                      <option value="Easy">Easy</option>
+                      <option value="Medium">Medium</option>
+                      <option value="Hard">Hard</option>
+                    </select>
+                  </div>
 
-                <div className="form-group">
-                  <label htmlFor="input-difficulty">Difficulty</label>
-                  <select
-                    id="input-difficulty"
-                    className="custom-select"
-                    required
-                    value={addForm.difficulty}
-                    onChange={(e) => setAddForm(prev => ({ ...prev, difficulty: e.target.value }))}
-                  >
-                    <option value="Easy">Easy</option>
-                    <option value="Medium">Medium</option>
-                    <option value="Hard">Hard</option>
-                  </select>
+                  <div className="form-group grid-full">
+                    <label htmlFor="input-link" className="form-label-with-icon">
+                      <ExternalLink size={14} />
+                      <span>Question Link (URL)</span>
+                    </label>
+                    <input
+                      type="url"
+                      id="input-link"
+                      placeholder="https://leetcode.com/problems/..."
+                      required
+                      value={addForm.link}
+                      onChange={(e) => setAddForm(prev => ({ ...prev, link: e.target.value }))}
+                    />
+                  </div>
+
+                  <div className="form-group grid-full">
+                    <label htmlFor="input-youtube" className="form-label-with-icon">
+                      <Youtube size={14} className="youtube-icon-red" />
+                      <span>YouTube Link (Optional)</span>
+                    </label>
+                    <input
+                      type="url"
+                      id="input-youtube"
+                      placeholder="https://www.youtube.com/watch?v=..."
+                      value={addForm.youtube}
+                      onChange={(e) => setAddForm(prev => ({ ...prev, youtube: e.target.value }))}
+                    />
+                  </div>
                 </div>
               </div>
               <div className="modal-footer">
@@ -1187,57 +1236,85 @@ function App() {
             </div>
             <form onSubmit={handleEditSubmit}>
               <div className="modal-body">
-                <div className="form-group">
-                  <label htmlFor="edit-topic">Topic Name</label>
-                  <input
-                    type="text"
-                    id="edit-topic"
-                    placeholder="e.g., Arrays & Hashing, Trees..."
-                    required
-                    list="existing-topics-react"
-                    value={editForm.topic}
-                    onChange={(e) => setEditForm(prev => ({ ...prev, topic: e.target.value }))}
-                  />
-                  <span className="input-helper">Select an existing topic or type a new one.</span>
-                </div>
+                <div className="modal-form-grid">
+                  <div className="form-group grid-full">
+                    <label htmlFor="edit-name" className="form-label-with-icon">
+                      <Code size={14} />
+                      <span>Question Title</span>
+                    </label>
+                    <input
+                      type="text"
+                      id="edit-name"
+                      placeholder="e.g., Two Sum, Reverse Linked List"
+                      required
+                      value={editForm.name}
+                      onChange={(e) => setEditForm(prev => ({ ...prev, name: e.target.value }))}
+                    />
+                  </div>
 
-                <div className="form-group">
-                  <label htmlFor="edit-name">Question Title</label>
-                  <input
-                    type="text"
-                    id="edit-name"
-                    placeholder="e.g., Two Sum, Reverse Linked List"
-                    required
-                    value={editForm.name}
-                    onChange={(e) => setEditForm(prev => ({ ...prev, name: e.target.value }))}
-                  />
-                </div>
+                  <div className="form-group">
+                    <label htmlFor="edit-topic" className="form-label-with-icon">
+                      <FolderOpen size={14} />
+                      <span>Topic Name</span>
+                    </label>
+                    <input
+                      type="text"
+                      id="edit-topic"
+                      placeholder="e.g., Arrays & Hashing..."
+                      required
+                      list="existing-topics-react"
+                      value={editForm.topic}
+                      onChange={(e) => setEditForm(prev => ({ ...prev, topic: e.target.value }))}
+                    />
+                    <span className="input-helper">Select or type a new topic.</span>
+                  </div>
 
-                <div className="form-group">
-                  <label htmlFor="edit-link">Question Link (URL)</label>
-                  <input
-                    type="url"
-                    id="edit-link"
-                    placeholder="https://leetcode.com/problems/..."
-                    required
-                    value={editForm.link}
-                    onChange={(e) => setEditForm(prev => ({ ...prev, link: e.target.value }))}
-                  />
-                </div>
+                  <div className="form-group">
+                    <label htmlFor="edit-difficulty" className="form-label-with-icon">
+                      <Award size={14} />
+                      <span>Difficulty</span>
+                    </label>
+                    <select
+                      id="edit-difficulty"
+                      className="custom-select"
+                      required
+                      value={editForm.difficulty}
+                      onChange={(e) => setEditForm(prev => ({ ...prev, difficulty: e.target.value }))}
+                    >
+                      <option value="Easy">Easy</option>
+                      <option value="Medium">Medium</option>
+                      <option value="Hard">Hard</option>
+                    </select>
+                  </div>
 
-                <div className="form-group">
-                  <label htmlFor="edit-difficulty">Difficulty</label>
-                  <select
-                    id="edit-difficulty"
-                    className="custom-select"
-                    required
-                    value={editForm.difficulty}
-                    onChange={(e) => setEditForm(prev => ({ ...prev, difficulty: e.target.value }))}
-                  >
-                    <option value="Easy">Easy</option>
-                    <option value="Medium">Medium</option>
-                    <option value="Hard">Hard</option>
-                  </select>
+                  <div className="form-group grid-full">
+                    <label htmlFor="edit-link" className="form-label-with-icon">
+                      <ExternalLink size={14} />
+                      <span>Question Link (URL)</span>
+                    </label>
+                    <input
+                      type="url"
+                      id="edit-link"
+                      placeholder="https://leetcode.com/problems/..."
+                      required
+                      value={editForm.link}
+                      onChange={(e) => setEditForm(prev => ({ ...prev, link: e.target.value }))}
+                    />
+                  </div>
+
+                  <div className="form-group grid-full">
+                    <label htmlFor="edit-youtube" className="form-label-with-icon">
+                      <Youtube size={14} className="youtube-icon-red" />
+                      <span>YouTube Link (Optional)</span>
+                    </label>
+                    <input
+                      type="url"
+                      id="edit-youtube"
+                      placeholder="https://www.youtube.com/watch?v=..."
+                      value={editForm.youtube}
+                      onChange={(e) => setEditForm(prev => ({ ...prev, youtube: e.target.value }))}
+                    />
+                  </div>
                 </div>
               </div>
               <div className="modal-footer">
@@ -1262,9 +1339,12 @@ function App() {
                 <X size={18} />
               </button>
             </div>
-            <div className="modal-body">
-              <p>This action will reset your progress back to unsolved for all questions in your sheet.</p>
-              <p className="warning-text">Note: This action cannot be undone.</p>
+            <div className="modal-body confirm-body">
+              <p className="confirm-main-text">This action will reset your progress back to unsolved for all questions in your sheet.</p>
+              <div className="warning-box">
+                <AlertTriangle size={20} className="warning-box-icon" />
+                <p className="warning-text">Warning: This action cannot be undone and all revision counts will be reset.</p>
+              </div>
             </div>
             <div className="modal-footer">
               <button type="button" className="btn btn-secondary" onClick={() => setIsResetModalOpen(false)}>Cancel</button>

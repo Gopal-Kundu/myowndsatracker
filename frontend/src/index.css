@@ -803,10 +803,40 @@ body::after {
 }
 
 .col-revisions {
-  width: 130px;
+  width: 150px;
   flex-shrink: 0;
   display: flex;
   align-items: center;
+  justify-content: center;
+}
+
+.col-youtube {
+  width: 100px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.youtube-link {
+  color: #ff0000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform var(--transition-fast), filter var(--transition-fast);
+}
+
+.youtube-link:hover {
+  transform: scale(1.2);
+  filter: drop-shadow(0 0 6px rgba(255, 0, 0, 0.7));
+}
+
+.youtube-link-placeholder {
+  color: var(--color-text-muted);
+  opacity: 0.25;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 /* Revisions Counter Styles */
@@ -908,6 +938,13 @@ body::after {
   .col-revisions {
     width: auto;
     order: 6;
+    padding-left: 2.75rem;
+    margin-right: 1.5rem;
+  }
+
+  .col-youtube {
+    width: auto;
+    order: 7;
     padding-left: 2.75rem;
   }
 }
@@ -1154,8 +1191,8 @@ body::after {
   background-color: var(--bg-secondary);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
-  width: 90%;
-  max-width: 500px;
+  width: calc(100% - 2rem);
+  max-width: 460px;
   box-shadow: var(--shadow-lg), var(--shadow-accent);
   overflow: hidden;
   animation: modalScaleUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
@@ -1267,6 +1304,83 @@ body::after {
   color: var(--color-danger);
   font-weight: 600;
   margin-top: 0.25rem;
+}
+
+/* Custom grid system for modal form */
+.modal-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1.25rem;
+}
+
+.grid-full {
+  grid-column: span 2;
+}
+
+.form-label-with-icon {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.form-label-with-icon svg {
+  color: var(--color-accent);
+}
+
+.form-label-with-icon .youtube-icon-red {
+  color: #ff0000 !important;
+}
+
+/* warning-box styles for reset dialog */
+.warning-box {
+  background-color: rgba(244, 63, 94, 0.05);
+  border: 1px solid rgba(244, 63, 94, 0.15);
+  border-radius: var(--radius-md);
+  padding: 1rem;
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+  margin-top: 0.5rem;
+}
+
+.warning-box-icon {
+  color: var(--color-danger);
+  flex-shrink: 0;
+  margin-top: 0.1rem;
+}
+
+.warning-box .warning-text {
+  color: var(--color-danger);
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin: 0;
+  line-height: 1.4;
+}
+
+.confirm-main-text {
+  color: var(--color-text-secondary);
+  font-size: 0.95rem;
+  line-height: 1.5;
+  margin: 0 0 0.5rem 0;
+}
+
+.modal-confirm-card {
+  max-width: 450px;
+}
+
+@media (max-width: 600px) {
+  .modal-form-grid {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+  .grid-full {
+    grid-column: span 1;
+  }
 }
 
 .modal-footer {
@@ -1899,8 +2013,8 @@ body::after {
 
   /* Modal responsiveness updates */
   .modal-card {
-    width: 88%;
-    max-width: 420px;
+    width: calc(100% - 1.5rem);
+    max-width: 380px;
   }
 
   .modal-header,
